@@ -1,113 +1,42 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
+/// @title Epoch-staged ERC-7540 vault interface
+/// @notice Fully async deposit and redeem interface for the Safe-backed wrapper.
+interface ISemiAsyncRedeemVault {
+    event DepositRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets);
+    event RedeemRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares);
+    event OperatorSet(address indexed controller, address indexed operator, bool approved);
 
-/**
- * @title Semi-Async Redeem Vault Interface
- * @notice Extends ERC4626 with ERC-7540 asynchronous redeem workflow
- * @dev Users can request redemptions that are either fulfilled immediately from idle liquidity
- *      or fulfilled later once assets are deallocated from strategies.
- *      Implements IERC7540Redeem (which includes IERC7540Operator).
- */
-interface ISemiAsyncRedeemVault is IERC4626, IERC7540Redeem {
-    /*//////////////////////////////////////////////////////////////
-                          DEPRECATED EVENTS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @dev DEPRECATED: Use RedeemRequest from IERC7540Redeem instead.
-     *      Kept for backward compatibility during transition.
-     */
-    event WithdrawRequested(
-        address indexed caller,
-        address indexed receiver,
-        address indexed owner,
-        bytes32 withdrawKey,
-        uint256 assets,
-        uint256 shares
+    event EpochClosed(
+        uint40 indexed epochId, uint40 indexed nextEpochId, uint256 totalDepositAssets, uint256 totalRedeemShares
     );
 
-    /**
-     * @dev Emitted when a withdrawal request is claimed
-     * @param receiver The address that received the claimed assets
-     * @param owner The address that owned the burned shares
-     * @param withdrawKey Unique identifier for the claimed withdrawal request
-     * @param assets The amount of assets claimed and transferred
-     */
-    event Claimed(address indexed receiver, address indexed owner, bytes32 indexed withdrawKey, uint256 assets);
+    event EpochSettled(
+        uint40 indexed epochId,
+        uint256 navSnapshot,
+        uint256 totalSupplySnapshot,
+        uint256 totalDepositAssets,
+        uint256 totalRedeemShares,
+        uint256 depositSharesMinted,
+        uint256 redeemAssetsReserved
+    );
 
-    /**
-     * @notice Checks whether a withdrawal request is ready to be claimed
-     * @param withdrawKey The unique identifier of the withdrawal request
-     * @return True if the request has been fulfilled and can be claimed
-     */
-    function isClaimable(bytes32 withdrawKey) external view returns (bool);
+    function currentEpochId() external view returns (uint40);
+    function frozenEpochId() external view returns (uint40);
+    function staging() external view returns (address);
 
-    /**
-     * @notice Checks whether a withdrawal request has been claimed
-     * @param withdrawKey The unique identifier of the withdrawal request
-     * @return True if the request has been claimed
-     */
-    function isClaimed(bytes32 withdrawKey) external view returns (bool);
+    function requestDeposit(uint256 assets, address controller, address owner) external returns (uint256 requestId);
+    function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256 pendingAssets);
+    function claimableDepositRequest(uint256 requestId, address controller) external view returns (uint256 claimableAssets);
 
-    /**
-     * @notice Claims the assets from a fulfilled withdrawal request
-     * @param withdrawKey The unique identifier of the withdrawal request to claim
-     * @return The amount of assets transferred to the receiver
-     */
-    function claim(bytes32 withdrawKey) external returns (uint256);
+    function requestRedeem(uint256 shares, address controller, address owner) external returns (uint256 requestId);
+    function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256 pendingShares);
+    function claimableRedeemRequest(uint256 requestId, address controller) external view returns (uint256 claimableShares);
 
-    /*//////////////////////////////////////////////////////////////
-                           VAULT-SPECIFIC VIEWS
-    //////////////////////////////////////////////////////////////*/
+    function setOperator(address operator, bool approved) external returns (bool);
+    function isOperator(address controller, address operator) external view returns (bool status);
 
-    /**
-     * @notice Returns the maximum amount of vault shares that can be requested for redemption
-     * @param owner The address to check the requestable redemption limit for
-     * @return The maximum shares that can be requested given the owner's balance and current conditions
-     */
-    function maxRequestRedeem(address owner) external view returns (uint256);
-
-    /**
-     * @notice Returns the total amount of assets currently allocated to strategies
-     * @dev These assets are deployed and are not immediately withdrawable until deallocated.
-     *      Part of the vault's total asset value but not available for immediate withdrawal.
-     *      See ASSET STATE OVERVIEW for complete context.
-     * @return The total assets deployed in strategies
-     */
-    function allocatedAssets() external view returns (uint256);
-
-    /**
-     * @notice Returns the amount of assets that can be withdrawn immediately
-     * @dev MUST be mutually exclusive with `pendingWithdrawals()` being non-zero:
-     *      - If `idleAssets() > 0`, then `pendingWithdrawals()` MUST return 0
-     *      - If `pendingWithdrawals() > 0`, then `idleAssets()` MUST return 0
-     *
-     *      Idle assets include:
-     *      - On-hand balance in the vault contract
-     *      - Assets claimable from strategies (claimableFromStrategies())
-     *      - Minus any reservations for pending withdrawal requests
-     *
-     *      See ASSET STATE OVERVIEW for complete context.
-     * @return The total idle assets available for immediate withdrawal
-     */
-    function idleAssets() external view returns (uint256);
-
-    /**
-     * @notice Returns the total amount of assets requested for withdrawal but not yet fulfilled
-     * @dev MUST be mutually exclusive with `idleAssets()` being non-zero:
-     *      - If `pendingWithdrawals() > 0`, then `idleAssets()` MUST return 0
-     *      - If `idleAssets() > 0`, then `pendingWithdrawals()` MUST return 0
-     *
-     *      This represents the vault's outstanding obligations to users.
-     *      Assets become available for withdrawal as:
-     *      - Strategies deallocate assets (pendingDeallocationAssets → claimableFromStrategies)
-     *      - Claimable assets are claimed (claimableFromStrategies → idleAssets)
-     *
-     *      See ASSET STATE OVERVIEW for complete context.
-     * @return The total assets across all pending (unfulfilled) withdrawal requests
-     */
-    function pendingWithdrawals() external view returns (uint256);
+    function closeEpoch() external returns (uint40 closedEpochId, uint40 nextEpochId);
+    function settleEpoch(uint40 epochId, uint256 navSnapshot) external;
 }
