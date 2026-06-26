@@ -8,6 +8,9 @@ import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {IERC7540, IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
+import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
@@ -126,6 +129,32 @@ contract SmartAccountWrapperTest is Test {
         vm.prank(newOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, newOwner));
         vault.pause();
+    }
+
+    function test_setSmartAccount_onlyOwnerAndRejectsZeroAddress() public {
+        address newSafe = makeAddr("newSafe");
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        vault.setSmartAccount(newSafe);
+
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vault.setSmartAccount(address(0));
+
+        vm.expectEmit(false, false, false, true);
+        emit SmartAccountWrapper.SmartAccountSet(newSafe);
+        vault.setSmartAccount(newSafe);
+        assertEq(vault.smartAccount(), newSafe);
+    }
+
+    function test_supportsDeclaredInterfacesOnly() public view {
+        assertTrue(vault.supportsInterface(type(IERC165).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7540).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7540Deposit).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7540Redeem).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7540Operator).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7575).interfaceId));
+        assertFalse(vault.supportsInterface(0xffffffff));
     }
 
     function _deployWithEOAOwner(uint256 privateKey) internal returns (SmartAccountWrapper wrapper, address eoaOwner) {

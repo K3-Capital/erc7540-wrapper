@@ -8,6 +8,7 @@ import {IERC7540Deposit, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
 import {SemiAsyncRedeemVault} from "../src/SemiAsyncRedeemVault.sol";
+import {Staging} from "../src/Staging.sol";
 
 contract EpochStagedERC7540Test is Test {
     SmartAccountWrapper public vault;
@@ -53,10 +54,37 @@ contract EpochStagedERC7540Test is Test {
         uint256 requestId = _requestDeposit(alice, 100 * ONE);
 
         assertEq(requestId, 1, "request id is current epoch");
+        assertEq(vault.share(), address(vault), "ERC-7575 share token is the vault token");
         assertEq(vault.pendingDepositRequest(requestId, alice), 100 * ONE, "pending deposit assets");
         assertEq(vault.claimableDepositRequest(requestId, alice), 0, "not claimable before settlement");
         assertEq(vault.balanceOf(alice), 0, "request does not mint shares");
         assertEq(asset.balanceOf(vault.staging()), 100 * ONE, "assets staged");
+    }
+
+    function test_requestValidationAndInvalidRequestIdReverts() public {
+        vm.startPrank(alice);
+        asset.approve(address(vault), 100 * ONE);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vault.requestDeposit(0, alice, alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vault.requestDeposit(1, address(0), alice);
+        vm.stopPrank();
+
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vault.requestDeposit(1, bob, alice);
+
+        vm.startPrank(alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vault.requestRedeem(0, alice, alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vault.requestRedeem(1, address(0), alice);
+        vm.stopPrank();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__InvalidRequestId.selector, uint256(type(uint40).max) + 1)
+        );
+        vault.pendingDepositRequest(uint256(type(uint40).max) + 1, alice);
     }
 
     function test_closeEpoch_freezesOneEpochAndOpensNext() public {
@@ -139,6 +167,7 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
         _settle(2, 100 * ONE, 0);
 
+        assertEq(vault.pendingRedeemRequest(2, alice), 0, "redeem no longer pending after settlement");
         assertEq(vault.claimableRedeemRequest(2, alice), 40 * ONE, "redeem claimable");
         assertEq(vault.maxRedeem(alice), 40 * ONE, "oldest redeem claimable shares");
         assertEq(vault.claimableDepositRequest(2, bob), 100 * ONE, "deposit claimable");
@@ -154,6 +183,83 @@ contract EpochStagedERC7540Test is Test {
         vm.prank(bob);
         uint256 bobShares = vault.deposit(100 * ONE, bob, bob);
         assertEq(bobShares, 100 * ONE, "deposit priced at same epoch NAV");
+    }
+
+    function test_depositAndMintOverloadsUseSenderAsController() public {
+        _requestDeposit(alice, 100 * ONE);
+        _requestDeposit(bob, 50 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        uint256 aliceShares = vault.deposit(100 * ONE, alice);
+        assertEq(aliceShares, 100 * ONE, "two-argument deposit claims msg.sender controller");
+
+        vm.prank(bob);
+        uint256 bobAssets = vault.mint(50 * ONE, bob);
+        assertEq(bobAssets, 50 * ONE, "two-argument mint claims msg.sender controller");
+    }
+
+    function test_mintAndWithdrawClaimPaths() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        uint256 assetsIn = vault.mint(40 * ONE, alice, alice);
+        assertEq(assetsIn, 40 * ONE, "mint claim consumes proportional deposit assets");
+        assertEq(vault.maxDeposit(alice), 60 * ONE, "deposit claim remains on oldest epoch");
+        assertEq(vault.maxMint(alice), 60 * ONE, "share claim remains on oldest epoch");
+
+        vm.prank(alice);
+        assetsIn = vault.mint(60 * ONE, alice, alice);
+        assertEq(assetsIn, 60 * ONE, "final mint claim consumes remaining assets");
+        assertEq(vault.balanceOf(alice), 100 * ONE, "all shares claimed");
+
+        vm.prank(alice);
+        vault.requestRedeem(50 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 50 * ONE);
+
+        assertEq(vault.maxWithdraw(alice), 50 * ONE, "withdraw assets available on oldest redeem epoch");
+        vm.prank(alice);
+        uint256 sharesOut = vault.withdraw(20 * ONE, alice, alice);
+        assertEq(sharesOut, 20 * ONE, "withdraw claim consumes proportional redeem shares");
+        assertEq(vault.maxWithdraw(alice), 30 * ONE, "remaining redeem assets stay claimable");
+
+        vm.prank(alice);
+        sharesOut = vault.withdraw(30 * ONE, alice, alice);
+        assertEq(sharesOut, 30 * ONE, "final withdraw consumes remaining redeem shares");
+        assertEq(vault.maxWithdraw(alice), 0, "redeem claim consumed");
+    }
+
+    function test_settlementValidationReverts() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__WrongEpoch.selector, uint256(1), uint256(2)));
+        vault.settleEpoch(2, 0);
+
+        _settle(1, 0, 0);
+
+        vm.prank(safe);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NoFrozenEpoch.selector);
+        vault.settleEpoch(1, 0);
+
+        _claimDeposit(alice, 100 * ONE);
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.prank(safe);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__InvalidNavSnapshot.selector);
+        vault.settleEpoch(2, 0);
     }
 
     function test_assetDonationsDoNotChangeEpochPricing() public {
@@ -202,9 +308,18 @@ contract EpochStagedERC7540Test is Test {
         asset.mint(address(vault), 7 * ONE);
         uint256 safeBefore = asset.balanceOf(safe);
 
+        assertEq(vault.assetSurplus(), 7 * ONE, "donated asset balance is surplus");
         vault.rescue(address(asset), 7 * ONE);
 
         assertEq(asset.balanceOf(safe), safeBefore + 7 * ONE, "asset surplus belongs to the Safe");
+    }
+
+    function test_stagingOnlyVaultCanTransferTokens() public {
+        address staging_ = vault.staging();
+        asset.mint(staging_, 1);
+
+        vm.expectRevert(Staging.ST__NotVault.selector);
+        Staging(staging_).transferToken(address(asset), alice, 1);
     }
 
     function test_settleEpoch_revertsWhenRedeemReserveIsUnderfunded() public {
