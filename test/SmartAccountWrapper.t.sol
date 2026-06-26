@@ -14,7 +14,7 @@ import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
-import {SemiAsyncRedeemVault} from "../src/SemiAsyncRedeemVault.sol";
+import {EpochStagedERC7540Vault} from "../src/EpochStagedERC7540Vault.sol";
 
 contract MockERC1271Wallet is IERC1271 {
     bytes4 private constant ERC1271_MAGIC = 0x1626ba7e;
@@ -79,35 +79,35 @@ contract SmartAccountWrapperTest is Test {
 
     function test_uninitializedImplementationRejectsSafeOnlyCalls() public {
         SmartAccountWrapper impl = new SmartAccountWrapper();
-        vm.expectRevert(SemiAsyncRedeemVault.SA__SmartAccountNotSet.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__SmartAccountNotSet.selector);
         impl.closeEpoch();
     }
 
     function test_initializeRejectsZeroAddresses() public {
         SmartAccountWrapper impl = new SmartAccountWrapper();
 
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         impl.initialize(address(0), safe, address(asset), "SmartAccountWrapper", "SAW");
 
         impl = new SmartAccountWrapper();
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         impl.initialize(address(this), address(0), address(asset), "SmartAccountWrapper", "SAW");
 
         impl = new SmartAccountWrapper();
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         impl.initialize(address(this), safe, address(0), "SmartAccountWrapper", "SAW");
     }
 
     function test_onlySafeCanCloseAndSettle() public {
         vm.prank(user);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotSmartAccount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotSmartAccount.selector);
         vault.closeEpoch();
 
         vm.prank(safe);
         vault.closeEpoch();
 
         vm.prank(user);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotSmartAccount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotSmartAccount.selector);
         vault.settleEpoch(1, 0);
     }
 
@@ -159,7 +159,7 @@ contract SmartAccountWrapperTest is Test {
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         vault.setSmartAccount(newSafe);
 
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         vault.setSmartAccount(address(0));
 
         vm.expectEmit(false, false, false, true);

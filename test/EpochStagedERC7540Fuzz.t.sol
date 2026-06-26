@@ -7,7 +7,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
-import {SemiAsyncRedeemVault} from "../src/SemiAsyncRedeemVault.sol";
+import {EpochStagedERC7540Vault} from "../src/EpochStagedERC7540Vault.sol";
 
 contract EpochStagedERC7540FuzzTest is Test {
     using Math for uint256;

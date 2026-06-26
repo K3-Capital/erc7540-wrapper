@@ -7,7 +7,7 @@ import {IERC7540Operator} from "forge-std/interfaces/IERC7540.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
-import {SemiAsyncRedeemVault} from "../src/SemiAsyncRedeemVault.sol";
+import {EpochStagedERC7540Vault} from "../src/EpochStagedERC7540Vault.sol";
 
 contract ERC7540ComplianceTest is Test {
     SmartAccountWrapper public vault;
@@ -79,13 +79,13 @@ contract ERC7540ComplianceTest is Test {
     }
 
     function test_previewFunctionsRevert() public {
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewDeposit(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewMint(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewWithdraw(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewRedeem(1);
     }
 }

@@ -7,7 +7,7 @@ import {IERC7540Deposit, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
-import {SemiAsyncRedeemVault} from "../src/SemiAsyncRedeemVault.sol";
+import {EpochStagedERC7540Vault} from "../src/EpochStagedERC7540Vault.sol";
 import {Staging} from "../src/Staging.sol";
 
 contract EpochStagedERC7540Test is Test {
@@ -64,25 +64,25 @@ contract EpochStagedERC7540Test is Test {
     function test_requestValidationAndInvalidRequestIdReverts() public {
         vm.startPrank(alice);
         asset.approve(address(vault), 100 * ONE);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
         vault.requestDeposit(0, alice, alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         vault.requestDeposit(1, address(0), alice);
         vm.stopPrank();
 
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
         vault.requestDeposit(1, bob, alice);
 
         vm.startPrank(alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
         vault.requestRedeem(0, alice, alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
         vault.requestRedeem(1, address(0), alice);
         vm.stopPrank();
 
         vm.expectRevert(
-            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__InvalidRequestId.selector, uint256(type(uint40).max) + 1)
+            abi.encodeWithSelector(EpochStagedERC7540Vault.SA__InvalidRequestId.selector, uint256(type(uint40).max) + 1)
         );
         vault.pendingDepositRequest(uint256(type(uint40).max) + 1, alice);
     }
@@ -103,7 +103,7 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.pendingDepositRequest(2, bob), 50 * ONE, "new requests enter next open epoch");
 
         vm.prank(safe);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__FrozenEpochPending.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__FrozenEpochPending.selector);
         vault.closeEpoch();
     }
 
@@ -332,13 +332,13 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
 
         vm.prank(safe);
-        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__WrongEpoch.selector, uint256(1), uint256(2)));
+        vm.expectRevert(abi.encodeWithSelector(EpochStagedERC7540Vault.SA__WrongEpoch.selector, uint256(1), uint256(2)));
         vault.settleEpoch(2, 0);
 
         _settle(1, 0, 0);
 
         vm.prank(safe);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NoFrozenEpoch.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NoFrozenEpoch.selector);
         vault.settleEpoch(1, 0);
 
         _claimDeposit(alice, 100 * ONE);
@@ -348,19 +348,19 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
 
         vm.prank(safe);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__InvalidNavSnapshot.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InvalidNavSnapshot.selector);
         vault.settleEpoch(2, 0);
     }
 
     function test_claimValidationReverts() public {
         vm.startPrank(alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NoClaimableEpoch.selector);
         vault.deposit(1, alice, alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NoClaimableEpoch.selector);
         vault.mint(1, alice, alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NoClaimableEpoch.selector);
         vault.withdraw(1, alice, alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NoClaimableEpoch.selector);
         vault.redeem(1, alice, alice);
         vm.stopPrank();
 
@@ -370,20 +370,20 @@ contract EpochStagedERC7540Test is Test {
         _settle(1, 0, 0);
 
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
         vault.deposit(1, bob, alice);
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
         vault.mint(1, bob, alice);
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
+            abi.encodeWithSelector(EpochStagedERC7540Vault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
         );
         vault.deposit(101 * ONE, alice, alice);
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
+            abi.encodeWithSelector(EpochStagedERC7540Vault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
         );
         vault.mint(101 * ONE, alice, alice);
 
@@ -396,17 +396,21 @@ contract EpochStagedERC7540Test is Test {
         _settle(2, 100 * ONE, 40 * ONE);
 
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
         vault.withdraw(1, bob, alice);
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
         vault.redeem(1, bob, alice);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE));
+        vm.expectRevert(
+            abi.encodeWithSelector(EpochStagedERC7540Vault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE)
+        );
         vault.withdraw(41 * ONE, alice, alice);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE));
+        vm.expectRevert(
+            abi.encodeWithSelector(EpochStagedERC7540Vault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE)
+        );
         vault.redeem(41 * ONE, alice, alice);
     }
 
@@ -426,7 +430,7 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(bob), 1, "asset claim exists");
         assertEq(vault.maxMint(bob), 0, "share claim rounds to zero");
         vm.prank(bob);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
         vault.deposit(1, bob, bob);
         assertEq(vault.maxDeposit(bob), 1, "zero-share claim does not advance deposit queue");
 
@@ -439,7 +443,7 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxRedeem(alice), 1, "share claim exists");
         assertEq(vault.maxWithdraw(alice), 0, "asset claim rounds to zero");
         vm.prank(alice);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
         vault.redeem(1, alice, alice);
         assertEq(vault.maxRedeem(alice), 1, "zero-asset claim does not advance redeem queue");
     }
@@ -479,7 +483,7 @@ contract EpochStagedERC7540Test is Test {
         _settle(2, 100 * ONE, 40 * ONE);
 
         assertEq(vault.redeemClaimReserves(), 40 * ONE, "redeem reserve recorded");
-        vm.expectRevert(SemiAsyncRedeemVault.SA__InsufficientSettlementAssets.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InsufficientSettlementAssets.selector);
         vault.rescue(address(asset), 1);
 
         vm.prank(alice);
@@ -518,18 +522,18 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
 
         vm.prank(safe);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__InsufficientSettlementAssets.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InsufficientSettlementAssets.selector);
         vault.settleEpoch(2, 100 * ONE);
     }
 
     function test_previewFunctionsRevertBecauseVaultIsFullyAsync() public {
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewDeposit(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewMint(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewWithdraw(1);
-        vm.expectRevert(SemiAsyncRedeemVault.SA__AsyncOnly.selector);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewRedeem(1);
     }
 }

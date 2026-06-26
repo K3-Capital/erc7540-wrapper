@@ -7,11 +7,11 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {ISemiAsyncRedeemVault} from "./ISemiAsyncRedeemVault.sol";
+import {IEpochStagedERC7540Vault} from "./IEpochStagedERC7540Vault.sol";
 import {Staging} from "./Staging.sol";
 
 /// @notice Fully async ERC-7540 epoch vault base.
-abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISemiAsyncRedeemVault {
+abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, IEpochStagedERC7540Vault {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -44,7 +44,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     /// @custom:storage-location erc7201:zyfai.storage.EpochAsyncVault
-    struct SemiAsyncRedeemVaultStorage {
+    struct EpochStagedERC7540VaultStorage {
         uint40 currentEpochId;
         uint40 frozenEpochId;
         Staging staging;
@@ -64,7 +64,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     // keccak256(abi.encode(uint256(keccak256("zyfai.storage.EpochAsyncVault")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant SEMI_ASYNC_REDEEM_VAULT_STORAGE_LOCATION =
+    bytes32 private constant EPOCH_STAGED_ERC7540_VAULT_STORAGE_LOCATION =
         0xfeab585c10efbf3bb169b09d6b661509bec6d52c999594b33373cb626354d100;
 
     error SA__AsyncOnly();
@@ -84,14 +84,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     error SA__InvalidNavSnapshot();
     error SA__InvalidRequestId(uint256 requestId);
 
-    function _getSemiAsyncRedeemVaultStorage() private pure returns (SemiAsyncRedeemVaultStorage storage $) {
+    function _getEpochStagedERC7540VaultStorage() private pure returns (EpochStagedERC7540VaultStorage storage $) {
         assembly {
-            $.slot := SEMI_ASYNC_REDEEM_VAULT_STORAGE_LOCATION
+            $.slot := EPOCH_STAGED_ERC7540_VAULT_STORAGE_LOCATION
         }
     }
 
-    function __SemiAsyncRedeemVault_init() internal onlyInitializing {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+    function __EpochStagedERC7540Vault_init() internal onlyInitializing {
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         $.currentEpochId = 1;
         $.staging = new Staging(address(this));
     }
@@ -103,13 +103,13 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     //////////////////////////////////////////////////////////////*/
 
     function setOperator(address operator, bool approved) external returns (bool) {
-        _getSemiAsyncRedeemVaultStorage().operators[_msgSender()][operator] = approved;
+        _getEpochStagedERC7540VaultStorage().operators[_msgSender()][operator] = approved;
         emit OperatorSet(_msgSender(), operator, approved);
         return true;
     }
 
     function isOperator(address controller, address operator) public view returns (bool status) {
-        return _getSemiAsyncRedeemVaultStorage().operators[controller][operator];
+        return _getEpochStagedERC7540VaultStorage().operators[controller][operator];
     }
 
     function _isAuthorized(address caller, address controller) internal view returns (bool) {
@@ -121,23 +121,23 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     //////////////////////////////////////////////////////////////*/
 
     function currentEpochId() public view returns (uint40) {
-        return _getSemiAsyncRedeemVaultStorage().currentEpochId;
+        return _getEpochStagedERC7540VaultStorage().currentEpochId;
     }
 
     function frozenEpochId() public view returns (uint40) {
-        return _getSemiAsyncRedeemVaultStorage().frozenEpochId;
+        return _getEpochStagedERC7540VaultStorage().frozenEpochId;
     }
 
     function staging() public view returns (address) {
-        return address(_getSemiAsyncRedeemVaultStorage().staging);
+        return address(_getEpochStagedERC7540VaultStorage().staging);
     }
 
     function totalAssets() public view override returns (uint256) {
-        return _getSemiAsyncRedeemVaultStorage().activeAssets;
+        return _getEpochStagedERC7540VaultStorage().activeAssets;
     }
 
     function redeemClaimReserves() public view returns (uint256) {
-        return _getSemiAsyncRedeemVaultStorage().totalRedeemClaimReserves;
+        return _getEpochStagedERC7540VaultStorage().totalRedeemClaimReserves;
     }
 
     function assetSurplus() public view returns (uint256) {
@@ -145,14 +145,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         EpochData storage epoch = $.epochs[_toEpochId(requestId)];
         if (epoch.settled) return 0;
         return epoch.depositAssets[controller];
     }
 
     function claimableDepositRequest(uint256 requestId, address controller) public view returns (uint256) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = _toEpochId(requestId);
         EpochData storage epoch = $.epochs[epochId];
         if (!epoch.settled) return 0;
@@ -162,14 +162,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         EpochData storage epoch = $.epochs[_toEpochId(requestId)];
         if (epoch.settled) return 0;
         return epoch.redeemShares[controller];
     }
 
     function claimableRedeemRequest(uint256 requestId, address controller) public view returns (uint256) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = _toEpochId(requestId);
         EpochData storage epoch = $.epochs[epochId];
         if (!epoch.settled) return 0;
@@ -193,14 +193,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         if (_claimsPaused()) return 0;
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) return 0;
-        return _remainingDepositShares(_getSemiAsyncRedeemVaultStorage(), epochId, controller);
+        return _remainingDepositShares(_getEpochStagedERC7540VaultStorage(), epochId, controller);
     }
 
     function maxWithdraw(address controller) public view override returns (uint256) {
         if (_claimsPaused()) return 0;
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) return 0;
-        return _remainingRedeemAssets(_getSemiAsyncRedeemVaultStorage(), epochId, controller);
+        return _remainingRedeemAssets(_getEpochStagedERC7540VaultStorage(), epochId, controller);
     }
 
     function maxRedeem(address controller) public view override returns (uint256) {
@@ -258,7 +258,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         address caller = _msgSender();
         if (caller != owner && !isOperator(owner, caller)) revert SA__NotAuthorized();
 
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.currentEpochId;
         requestId = epochId;
         EpochData storage epoch = $.epochs[epochId];
@@ -285,7 +285,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         address caller = _msgSender();
         if (caller != owner) _spendAllowance(owner, caller, shares);
 
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.currentEpochId;
         requestId = epochId;
         EpochData storage epoch = $.epochs[epochId];
@@ -299,7 +299,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         emit RedeemRequest(controller, owner, requestId, caller, shares);
     }
 
-    function _pushDepositEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+    function _pushDepositEpoch(EpochStagedERC7540VaultStorage storage $, address controller, uint40 epochId) internal {
         uint40 last = $.lastDepositEpoch[controller];
         if (last == epochId) return;
         if ($.firstDepositEpoch[controller] == 0) {
@@ -310,7 +310,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         $.lastDepositEpoch[controller] = epochId;
     }
 
-    function _pushRedeemEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+    function _pushRedeemEpoch(EpochStagedERC7540VaultStorage storage $, address controller, uint40 epochId) internal {
         uint40 last = $.lastRedeemEpoch[controller];
         if (last == epochId) return;
         if ($.firstRedeemEpoch[controller] == 0) {
@@ -326,7 +326,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     //////////////////////////////////////////////////////////////*/
 
     function closeEpoch() public virtual onlySmartAccount returns (uint40 closedEpochId, uint40 nextEpochId) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         if ($.frozenEpochId != 0) revert SA__FrozenEpochPending();
 
         closedEpochId = $.currentEpochId;
@@ -340,7 +340,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function settleEpoch(uint40 epochId, uint256 navSnapshot) public virtual onlySmartAccount {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         if ($.frozenEpochId == 0) revert SA__NoFrozenEpoch();
         if (epochId != $.frozenEpochId) revert SA__WrongEpoch($.frozenEpochId, epochId);
 
@@ -425,7 +425,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function deposit(uint256 assets, address receiver, address controller) public virtual returns (uint256 shares) {
-        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
+        (EpochStagedERC7540VaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
             _loadDepositClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _depositClaimRemaining($, epochId, controller, claim);
         shares = _sharesForDepositClaim(assets, remainingAssets, remainingShares);
@@ -437,7 +437,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function mint(uint256 shares, address receiver, address controller) public virtual returns (uint256 assets) {
-        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
+        (EpochStagedERC7540VaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
             _loadDepositClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _depositClaimRemaining($, epochId, controller, claim);
         assets = _assetsForMintClaim(shares, remainingAssets, remainingShares);
@@ -447,17 +447,17 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     function _loadDepositClaim(address controller)
         internal
         view
-        returns (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim)
+        returns (EpochStagedERC7540VaultStorage storage $, uint40 epochId, DepositClaimData storage claim)
     {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        $ = _getSemiAsyncRedeemVaultStorage();
+        $ = _getEpochStagedERC7540VaultStorage();
         epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
         claim = $.depositClaims[epochId][controller];
     }
 
     function _depositClaimRemaining(
-        SemiAsyncRedeemVaultStorage storage $,
+        EpochStagedERC7540VaultStorage storage $,
         uint40 epochId,
         address controller,
         DepositClaimData storage claim
@@ -490,7 +490,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function _consumeDepositClaim(
-        SemiAsyncRedeemVaultStorage storage $,
+        EpochStagedERC7540VaultStorage storage $,
         uint40 epochId,
         address controller,
         DepositClaimData storage claim,
@@ -512,7 +512,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function withdraw(uint256 assets, address receiver, address controller) public override returns (uint256 shares) {
-        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
+        (EpochStagedERC7540VaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
             _loadRedeemClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
         shares = _sharesForWithdrawClaim(assets, remainingAssets, remainingShares);
@@ -520,7 +520,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function redeem(uint256 shares, address receiver, address controller) public override returns (uint256 assets) {
-        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
+        (EpochStagedERC7540VaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
             _loadRedeemClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
         assets = _assetsForRedeemClaim(shares, remainingAssets, remainingShares);
@@ -530,17 +530,17 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     function _loadRedeemClaim(address controller)
         internal
         view
-        returns (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim)
+        returns (EpochStagedERC7540VaultStorage storage $, uint40 epochId, RedeemClaimData storage claim)
     {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        $ = _getSemiAsyncRedeemVaultStorage();
+        $ = _getEpochStagedERC7540VaultStorage();
         epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
         claim = $.redeemClaims[epochId][controller];
     }
 
     function _redeemClaimRemaining(
-        SemiAsyncRedeemVaultStorage storage $,
+        EpochStagedERC7540VaultStorage storage $,
         uint40 epochId,
         address controller,
         RedeemClaimData storage claim
@@ -572,7 +572,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function _consumeRedeemClaim(
-        SemiAsyncRedeemVaultStorage storage $,
+        EpochStagedERC7540VaultStorage storage $,
         uint40 epochId,
         address controller,
         RedeemClaimData storage claim,
@@ -594,7 +594,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         emit Withdraw(_msgSender(), receiver, _msgSender(), assets, shares);
     }
 
-    function _remainingDepositShares(SemiAsyncRedeemVaultStorage storage $, uint40 epochId, address controller)
+    function _remainingDepositShares(EpochStagedERC7540VaultStorage storage $, uint40 epochId, address controller)
         internal
         view
         returns (uint256)
@@ -609,7 +609,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         return totalShares - claim.sharesClaimed;
     }
 
-    function _remainingRedeemAssets(SemiAsyncRedeemVaultStorage storage $, uint40 epochId, address controller)
+    function _remainingRedeemAssets(EpochStagedERC7540VaultStorage storage $, uint40 epochId, address controller)
         internal
         view
         returns (uint256)
@@ -625,27 +625,31 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function _oldestDepositClaimEpoch(address controller) internal view returns (uint40) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.firstDepositEpoch[controller];
         if (epochId == 0 || !$.epochs[epochId].settled) return 0;
         return epochId;
     }
 
     function _oldestRedeemClaimEpoch(address controller) internal view returns (uint40) {
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.firstRedeemEpoch[controller];
         if (epochId == 0 || !$.epochs[epochId].settled) return 0;
         return epochId;
     }
 
-    function _advanceDepositEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+    function _advanceDepositEpoch(EpochStagedERC7540VaultStorage storage $, address controller, uint40 epochId)
+        internal
+    {
         if ($.firstDepositEpoch[controller] != epochId) return;
         uint40 next = $.nextDepositEpoch[controller][epochId];
         $.firstDepositEpoch[controller] = next;
         if (next == 0) $.lastDepositEpoch[controller] = 0;
     }
 
-    function _advanceRedeemEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+    function _advanceRedeemEpoch(EpochStagedERC7540VaultStorage storage $, address controller, uint40 epochId)
+        internal
+    {
         if ($.firstRedeemEpoch[controller] != epochId) return;
         uint40 next = $.nextRedeemEpoch[controller][epochId];
         $.firstRedeemEpoch[controller] = next;

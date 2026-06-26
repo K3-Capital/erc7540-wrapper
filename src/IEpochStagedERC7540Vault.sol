@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /// @title Epoch-staged ERC-7540 vault interface
 /// @notice Fully async deposit and redeem interface for the Safe-backed wrapper.
-interface ISemiAsyncRedeemVault {
+interface IEpochStagedERC7540Vault {
     event DepositRequest(
         address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets
     );

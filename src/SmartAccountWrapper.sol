@@ -12,13 +12,13 @@ import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/Signa
 import {IERC7540, IERC7540Deposit, IERC7540Redeem, IERC7540Operator} from "forge-std/interfaces/IERC7540.sol";
 import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
 
-import {SemiAsyncRedeemVault} from "./SemiAsyncRedeemVault.sol";
+import {EpochStagedERC7540Vault} from "./EpochStagedERC7540Vault.sol";
 
 contract SmartAccountWrapper is
     Initializable,
     Ownable2StepUpgradeable,
     PausableUpgradeable,
-    SemiAsyncRedeemVault,
+    EpochStagedERC7540Vault,
     IERC1271
 {
     using SafeERC20 for IERC20;
@@ -68,7 +68,7 @@ contract SmartAccountWrapper is
         __Pausable_init();
         __ERC20_init_unchained(name_, symbol_);
         __ERC4626_init_unchained(IERC20(underlyingToken_));
-        __SemiAsyncRedeemVault_init();
+        __EpochStagedERC7540Vault_init();
         _getSmartAccountWrapperStorage().smartAccount = smartAccount_;
         emit SmartAccountSet(smartAccount_);
     }
