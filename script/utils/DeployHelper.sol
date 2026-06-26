@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {SmartAccountProxy} from "../../src/SmartAccountProxy.sol";
 import {SmartAccountWrapper} from "../../src/SmartAccountWrapper.sol";
 import {CREATE3} from "solady/utils/CREATE3.sol";
 
@@ -47,7 +47,7 @@ library DeployHelper {
             params.symbol
         );
         result.wrapper = CREATE3.deployDeterministic(
-            abi.encodePacked(type(SmartAccountProxy).creationCode, abi.encode(result.beacon, initData)), wrapperSalt
+            abi.encodePacked(type(BeaconProxy).creationCode, abi.encode(result.beacon, initData)), wrapperSalt
         );
 
         // Verify deployment
@@ -92,7 +92,7 @@ library DeployHelper {
         string memory name_,
         string memory symbol_
     ) internal returns (SmartAccountWrapper) {
-        SmartAccountProxy proxy = new SmartAccountProxy(
+        BeaconProxy proxy = new BeaconProxy(
             beacon,
             abi.encodeWithSelector(
                 SmartAccountWrapper.initialize.selector, owner_, smartAccount_, underlyingToken_, name_, symbol_
