@@ -14,7 +14,13 @@ import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
 
 import {SemiAsyncRedeemVault} from "./SemiAsyncRedeemVault.sol";
 
-contract SmartAccountWrapper is Initializable, Ownable2StepUpgradeable, PausableUpgradeable, SemiAsyncRedeemVault, IERC1271 {
+contract SmartAccountWrapper is
+    Initializable,
+    Ownable2StepUpgradeable,
+    PausableUpgradeable,
+    SemiAsyncRedeemVault,
+    IERC1271
+{
     using SafeERC20 for IERC20;
 
     bytes4 private constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
@@ -55,7 +61,9 @@ contract SmartAccountWrapper is Initializable, Ownable2StepUpgradeable, Pausable
         string memory name_,
         string memory symbol_
     ) public initializer {
-        if (owner_ == address(0) || smartAccount_ == address(0) || underlyingToken_ == address(0)) revert SA__ZeroAddress();
+        if (owner_ == address(0) || smartAccount_ == address(0) || underlyingToken_ == address(0)) {
+            revert SA__ZeroAddress();
+        }
         __Ownable_init(owner_);
         __Pausable_init();
         __ERC20_init_unchained(name_, symbol_);
@@ -141,9 +149,23 @@ contract SmartAccountWrapper is Initializable, Ownable2StepUpgradeable, Pausable
 
     // Deprecated compatibility views. The epoch architecture no longer exposes
     // idle/allocated/pending-withdrawal operational accounting.
-    function allocatedAssets() public pure returns (uint256) { return 0; }
-    function pendingDeallocationAssets() public pure returns (uint256) { return 0; }
-    function claimableFromStrategies() public pure returns (uint256) { return 0; }
-    function idleAssets() public view returns (uint256) { return IERC20(asset()).balanceOf(address(this)); }
-    function pendingWithdrawals() public pure returns (uint256) { return 0; }
+    function allocatedAssets() public pure returns (uint256) {
+        return 0;
+    }
+
+    function pendingDeallocationAssets() public pure returns (uint256) {
+        return 0;
+    }
+
+    function claimableFromStrategies() public pure returns (uint256) {
+        return 0;
+    }
+
+    function idleAssets() public view returns (uint256) {
+        return IERC20(asset()).balanceOf(address(this));
+    }
+
+    function pendingWithdrawals() public pure returns (uint256) {
+        return 0;
+    }
 }

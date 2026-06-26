@@ -4,8 +4,12 @@ pragma solidity ^0.8.0;
 /// @title Epoch-staged ERC-7540 vault interface
 /// @notice Fully async deposit and redeem interface for the Safe-backed wrapper.
 interface ISemiAsyncRedeemVault {
-    event DepositRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets);
-    event RedeemRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares);
+    event DepositRequest(
+        address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets
+    );
+    event RedeemRequest(
+        address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares
+    );
     event OperatorSet(address indexed controller, address indexed operator, bool approved);
 
     event EpochClosed(
@@ -28,11 +32,17 @@ interface ISemiAsyncRedeemVault {
 
     function requestDeposit(uint256 assets, address controller, address owner) external returns (uint256 requestId);
     function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256 pendingAssets);
-    function claimableDepositRequest(uint256 requestId, address controller) external view returns (uint256 claimableAssets);
+    function claimableDepositRequest(uint256 requestId, address controller)
+        external
+        view
+        returns (uint256 claimableAssets);
 
     function requestRedeem(uint256 shares, address controller, address owner) external returns (uint256 requestId);
     function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256 pendingShares);
-    function claimableRedeemRequest(uint256 requestId, address controller) external view returns (uint256 claimableShares);
+    function claimableRedeemRequest(uint256 requestId, address controller)
+        external
+        view
+        returns (uint256 claimableShares);
 
     function setOperator(address operator, bool approved) external returns (bool);
     function isOperator(address controller, address operator) external view returns (bool status);

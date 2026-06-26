@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - 'master'
+      - 'main'
   pull_request:
     branches:
-      - 'master'
+      - 'main'
 
 env:
   ARBITRUM_ONE_RPC_URL:  ${{ secrets.ARBITRUM_ONE_RPC_URL }}
@@ -38,7 +38,7 @@ jobs:
           forge fmt --check
         id: fmt
 
-      - name: Run Forge build
+      - name: Run Forge build and contract size check
         run: |
           forge build --sizes
         id: build

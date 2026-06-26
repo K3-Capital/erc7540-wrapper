@@ -27,18 +27,12 @@ library DeployHelper {
     function deployAll(DeployParams memory params) internal returns (DeployResult memory result) {
         // Deploy implementation via CREATE3
         bytes32 implSalt = keccak256(abi.encodePacked(params.salt, "implementation"));
-        result.implementation = CREATE3.deployDeterministic(
-            type(SmartAccountWrapper).creationCode,
-            implSalt
-        );
+        result.implementation = CREATE3.deployDeterministic(type(SmartAccountWrapper).creationCode, implSalt);
 
         // Deploy beacon via CREATE3
         bytes32 beaconSalt = keccak256(abi.encodePacked(params.salt, "beacon"));
         result.beacon = CREATE3.deployDeterministic(
-            abi.encodePacked(
-                type(UpgradeableBeacon).creationCode,
-                abi.encode(result.implementation, params.owner)
-            ),
+            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(result.implementation, params.owner)),
             beaconSalt
         );
 
@@ -53,11 +47,7 @@ library DeployHelper {
             params.symbol
         );
         result.wrapper = CREATE3.deployDeterministic(
-            abi.encodePacked(
-                type(SmartAccountProxy).creationCode,
-                abi.encode(result.beacon, initData)
-            ),
-            wrapperSalt
+            abi.encodePacked(type(SmartAccountProxy).creationCode, abi.encode(result.beacon, initData)), wrapperSalt
         );
 
         // Verify deployment
@@ -68,18 +58,10 @@ library DeployHelper {
     /// @param salt The CREATE3 salt
     /// @param deployer The address that will deploy (msg.sender during broadcast)
     function predictAddresses(bytes32 salt, address deployer) internal pure returns (DeployResult memory result) {
-        result.implementation = CREATE3.predictDeterministicAddress(
-            keccak256(abi.encodePacked(salt, "implementation")),
-            deployer
-        );
-        result.beacon = CREATE3.predictDeterministicAddress(
-            keccak256(abi.encodePacked(salt, "beacon")),
-            deployer
-        );
-        result.wrapper = CREATE3.predictDeterministicAddress(
-            keccak256(abi.encodePacked(salt, "wrapper")),
-            deployer
-        );
+        result.implementation =
+            CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "implementation")), deployer);
+        result.beacon = CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "beacon")), deployer);
+        result.wrapper = CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "wrapper")), deployer);
     }
 
     function _verifyDeployment(DeployResult memory result, DeployParams memory params) private view {
@@ -113,12 +95,7 @@ library DeployHelper {
         SmartAccountProxy proxy = new SmartAccountProxy(
             beacon,
             abi.encodeWithSelector(
-                SmartAccountWrapper.initialize.selector,
-                owner_,
-                smartAccount_,
-                underlyingToken_,
-                name_,
-                symbol_
+                SmartAccountWrapper.initialize.selector, owner_, smartAccount_, underlyingToken_, name_, symbol_
             )
         );
         SmartAccountWrapper wrapper = SmartAccountWrapper(address(proxy));

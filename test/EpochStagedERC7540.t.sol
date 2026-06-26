@@ -23,9 +23,7 @@ contract EpochStagedERC7540Test is Test {
         SmartAccountWrapper impl = new SmartAccountWrapper();
         asset = new ERC20Mock();
         address beacon = DeployHelper.deployBeacon(address(impl), address(this));
-        vault = DeployHelper.deploySmartAccountWrapper(
-            beacon, address(this), safe, address(asset), "Epoch Vault", "EV"
-        );
+        vault = DeployHelper.deploySmartAccountWrapper(beacon, address(this), safe, address(asset), "Epoch Vault", "EV");
 
         asset.mint(alice, 1_000_000 * ONE);
         asset.mint(bob, 1_000_000 * ONE);
@@ -172,7 +170,11 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.claimableDepositRequest(1, alice), 100 * ONE, "donations excluded from deposit claim assets");
         assertEq(vault.maxMint(alice), 100 * ONE, "donations excluded from deposit claim shares");
         assertEq(asset.balanceOf(vault.staging()), 20 * ONE, "staging donation is not swept into epoch settlement");
-        assertEq(asset.balanceOf(safe), 1_000_000 * ONE + 110 * ONE, "vault donation plus settled deposit surplus moves to safe");
+        assertEq(
+            asset.balanceOf(safe),
+            1_000_000 * ONE + 110 * ONE,
+            "vault donation plus settled deposit surplus moves to safe"
+        );
     }
 
     function test_rescueCannotDrainRedeemClaimReserves() public {

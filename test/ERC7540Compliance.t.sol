@@ -21,7 +21,9 @@ contract ERC7540ComplianceTest is Test {
         SmartAccountWrapper impl = new SmartAccountWrapper();
         asset = new ERC20Mock();
         address beacon = DeployHelper.deployBeacon(address(impl), address(this));
-        vault = DeployHelper.deploySmartAccountWrapper(beacon, address(this), safe, address(asset), "ERC7540Vault", "E7540");
+        vault = DeployHelper.deploySmartAccountWrapper(
+            beacon, address(this), safe, address(asset), "ERC7540Vault", "E7540"
+        );
         asset.mint(user, 1_000_000e18);
     }
 

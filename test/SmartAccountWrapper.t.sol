@@ -22,7 +22,9 @@ contract MockERC1271Wallet is IERC1271 {
 
     constructor(address[] memory _owners, uint256 _threshold) {
         require(_threshold <= _owners.length, "threshold too high");
-        for (uint256 i = 0; i < _owners.length; i++) owners[_owners[i]] = true;
+        for (uint256 i = 0; i < _owners.length; i++) {
+            owners[_owners[i]] = true;
+        }
         threshold = _threshold;
     }
 
@@ -57,7 +59,9 @@ contract SmartAccountWrapperTest is Test {
         SmartAccountWrapper impl = new SmartAccountWrapper();
         asset = new ERC20Mock();
         address beacon = DeployHelper.deployBeacon(address(impl), address(this));
-        vault = DeployHelper.deploySmartAccountWrapper(beacon, address(this), safe, address(asset), "SmartAccountWrapper", "SAW");
+        vault = DeployHelper.deploySmartAccountWrapper(
+            beacon, address(this), safe, address(asset), "SmartAccountWrapper", "SAW"
+        );
         asset.mint(user, 1_000_000e18);
     }
 
@@ -124,12 +128,13 @@ contract SmartAccountWrapperTest is Test {
         vault.pause();
     }
 
-
     function _deployWithEOAOwner(uint256 privateKey) internal returns (SmartAccountWrapper wrapper, address eoaOwner) {
         eoaOwner = vm.addr(privateKey);
         SmartAccountWrapper impl = new SmartAccountWrapper();
         address beacon = DeployHelper.deployBeacon(address(impl), address(this));
-        wrapper = DeployHelper.deploySmartAccountWrapper(beacon, eoaOwner, safe, address(asset), "SmartAccountWrapper", "SAW");
+        wrapper = DeployHelper.deploySmartAccountWrapper(
+            beacon, eoaOwner, safe, address(asset), "SmartAccountWrapper", "SAW"
+        );
     }
 
     function test_isValidSignature_EOA_ValidSignature() public {
@@ -154,7 +159,9 @@ contract SmartAccountWrapperTest is Test {
         MockERC1271Wallet wallet = new MockERC1271Wallet(owners, threshold);
         SmartAccountWrapper impl = new SmartAccountWrapper();
         address beacon = DeployHelper.deployBeacon(address(impl), address(this));
-        wrapper = DeployHelper.deploySmartAccountWrapper(beacon, address(wallet), safe, address(asset), "SmartAccountWrapper", "SAW");
+        wrapper = DeployHelper.deploySmartAccountWrapper(
+            beacon, address(wallet), safe, address(asset), "SmartAccountWrapper", "SAW"
+        );
     }
 
     function _sign(uint256 privateKey, bytes32 hash) internal pure returns (bytes memory) {
