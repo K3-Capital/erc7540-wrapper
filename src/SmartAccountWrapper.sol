@@ -146,26 +146,4 @@ contract SmartAccountWrapper is
             || interfaceId == type(IERC7540Deposit).interfaceId || interfaceId == type(IERC7540Redeem).interfaceId
             || interfaceId == type(IERC7540Operator).interfaceId || interfaceId == type(IERC7575).interfaceId;
     }
-
-    // Deprecated compatibility views. The epoch architecture no longer exposes
-    // idle/allocated/pending-withdrawal operational accounting.
-    function allocatedAssets() public pure returns (uint256) {
-        return 0;
-    }
-
-    function pendingDeallocationAssets() public pure returns (uint256) {
-        return 0;
-    }
-
-    function claimableFromStrategies() public pure returns (uint256) {
-        return 0;
-    }
-
-    function idleAssets() public view returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this));
-    }
-
-    function pendingWithdrawals() public pure returns (uint256) {
-        return 0;
-    }
 }
