@@ -259,6 +259,8 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxRedeem(alice), 40 * ONE, "oldest redeem claimable shares");
         assertEq(vault.claimableDepositRequest(2, bob), 100 * ONE, "deposit claimable");
         assertEq(asset.balanceOf(safe), 1_000_000 * ONE + 160 * ONE, "net surplus moved to safe");
+        assertEq(asset.balanceOf(address(vault)), 0, "vault does not custody redeem claim reserves");
+        assertEq(asset.balanceOf(vault.staging()), 40 * ONE, "redeem claim reserves are staged");
         assertEq(vault.totalAssets(), 160 * ONE, "post-settlement active assets");
 
         uint256 aliceAssetsBefore = asset.balanceOf(alice);
@@ -266,6 +268,7 @@ contract EpochStagedERC7540Test is Test {
         uint256 assetsOut = vault.redeem(40 * ONE, alice, alice);
         assertEq(assetsOut, 40 * ONE, "redeem pays settled assets");
         assertEq(asset.balanceOf(alice), aliceAssetsBefore + 40 * ONE, "assets received");
+        assertEq(asset.balanceOf(vault.staging()), 0, "redeem claim releases staged reserves");
 
         vm.prank(bob);
         uint256 bobShares = vault.deposit(100 * ONE, bob, bob);

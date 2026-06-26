@@ -141,9 +141,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function assetSurplus() public view returns (uint256) {
-        uint256 balance = IERC20(asset()).balanceOf(address(this));
-        uint256 reserves = redeemClaimReserves();
-        return balance > reserves ? balance - reserves : 0;
+        return IERC20(asset()).balanceOf(address(this));
     }
 
     function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256) {
@@ -361,8 +359,11 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
             $.staging.transferToken(asset(), address(this), epoch.totalDepositAssets);
         }
 
-        uint256 unreservedBalance = IERC20(asset()).balanceOf(address(this)) - $.totalRedeemClaimReserves;
-        if (unreservedBalance < redeemAssets) revert SA__InsufficientSettlementAssets();
+        if (IERC20(asset()).balanceOf(address(this)) < redeemAssets) revert SA__InsufficientSettlementAssets();
+
+        if (redeemAssets > 0) {
+            IERC20(asset()).safeTransfer(address($.staging), redeemAssets);
+        }
 
         if (epoch.totalRedeemShares > 0) {
             _burn(address($.staging), epoch.totalRedeemShares);
@@ -385,7 +386,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         epoch.settled = true;
         $.frozenEpochId = 0;
 
-        uint256 surplus = IERC20(asset()).balanceOf(address(this)) - $.totalRedeemClaimReserves;
+        uint256 surplus = IERC20(asset()).balanceOf(address(this));
         if (surplus > 0) IERC20(asset()).safeTransfer(_smartAccount(), surplus);
 
         emit EpochSettled(
@@ -583,7 +584,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
         $.totalRedeemClaimReserves -= assets;
-        IERC20(asset()).safeTransfer(receiver, assets);
+        $.staging.transferToken(asset(), receiver, assets);
         if (
             claim.sharesClaimed == $.epochs[epochId].redeemShares[controller]
                 || _remainingRedeemAssets($, epochId, controller) == 0
