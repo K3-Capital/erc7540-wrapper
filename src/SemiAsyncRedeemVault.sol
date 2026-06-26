@@ -22,20 +22,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         uint256 totalRedeemShares;
         mapping(address controller => uint256 assets) depositAssets;
         mapping(address controller => uint256 shares) redeemShares;
-        address[] depositControllers;
-        address[] redeemControllers;
     }
 
     struct DepositClaimData {
-        uint256 assetsClaimable;
-        uint256 sharesClaimable;
         uint256 assetsClaimed;
         uint256 sharesClaimed;
     }
 
     struct RedeemClaimData {
-        uint256 sharesClaimable;
-        uint256 assetsClaimable;
         uint256 sharesClaimed;
         uint256 assetsClaimed;
     }
@@ -61,6 +55,12 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         mapping(uint40 epochId => mapping(address controller => DepositClaimData)) depositClaims;
         mapping(uint40 epochId => mapping(address controller => RedeemClaimData)) redeemClaims;
         mapping(address controller => mapping(address operator => bool)) operators;
+        mapping(address controller => uint40 epochId) firstDepositEpoch;
+        mapping(address controller => uint40 epochId) lastDepositEpoch;
+        mapping(address controller => mapping(uint40 epochId => uint40 nextEpochId)) nextDepositEpoch;
+        mapping(address controller => uint40 epochId) firstRedeemEpoch;
+        mapping(address controller => uint40 epochId) lastRedeemEpoch;
+        mapping(address controller => mapping(uint40 epochId => uint40 nextEpochId)) nextRedeemEpoch;
     }
 
     // keccak256(abi.encode(uint256(keccak256("zyfai.storage.EpochAsyncVault")) - 1)) & ~bytes32(uint256(0xff))
@@ -144,8 +144,13 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function claimableDepositRequest(uint256 requestId, address controller) public view returns (uint256) {
-        DepositClaimData storage claim = _getSemiAsyncRedeemVaultStorage().depositClaims[_toEpochId(requestId)][controller];
-        return claim.assetsClaimable - claim.assetsClaimed;
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        uint40 epochId = _toEpochId(requestId);
+        EpochData storage epoch = $.epochs[epochId];
+        if (!epoch.settled) return 0;
+        DepositClaimData storage claim = $.depositClaims[epochId][controller];
+        uint256 assets = epoch.depositAssets[controller];
+        return assets - claim.assetsClaimed;
     }
 
     function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256) {
@@ -156,8 +161,13 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function claimableRedeemRequest(uint256 requestId, address controller) public view returns (uint256) {
-        RedeemClaimData storage claim = _getSemiAsyncRedeemVaultStorage().redeemClaims[_toEpochId(requestId)][controller];
-        return claim.sharesClaimable - claim.sharesClaimed;
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
+        uint40 epochId = _toEpochId(requestId);
+        EpochData storage epoch = $.epochs[epochId];
+        if (!epoch.settled) return 0;
+        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
+        uint256 shares = epoch.redeemShares[controller];
+        return shares - claim.sharesClaimed;
     }
 
     function share() external view returns (address) {
@@ -175,16 +185,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         if (_claimsPaused()) return 0;
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) return 0;
-        DepositClaimData storage claim = _getSemiAsyncRedeemVaultStorage().depositClaims[epochId][controller];
-        return claim.sharesClaimable - claim.sharesClaimed;
+        return _remainingDepositShares(_getSemiAsyncRedeemVaultStorage(), epochId, controller);
     }
 
     function maxWithdraw(address controller) public view override returns (uint256) {
         if (_claimsPaused()) return 0;
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) return 0;
-        RedeemClaimData storage claim = _getSemiAsyncRedeemVaultStorage().redeemClaims[epochId][controller];
-        return claim.assetsClaimable - claim.assetsClaimed;
+        return _remainingRedeemAssets(_getSemiAsyncRedeemVaultStorage(), epochId, controller);
     }
 
     function maxRedeem(address controller) public view override returns (uint256) {
@@ -248,7 +256,7 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         uint256 received = IERC20(asset()).balanceOf(address($.staging)) - beforeBalance;
         if (received == 0) revert SA__ZeroAmount();
 
-        if (epoch.depositAssets[controller] == 0) epoch.depositControllers.push(controller);
+        if (epoch.depositAssets[controller] == 0) _pushDepositEpoch($, controller, epochId);
         epoch.depositAssets[controller] += received;
         epoch.totalDepositAssets += received;
 
@@ -268,11 +276,33 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
 
         _transfer(owner, address($.staging), shares);
 
-        if (epoch.redeemShares[controller] == 0) epoch.redeemControllers.push(controller);
+        if (epoch.redeemShares[controller] == 0) _pushRedeemEpoch($, controller, epochId);
         epoch.redeemShares[controller] += shares;
         epoch.totalRedeemShares += shares;
 
         emit RedeemRequest(controller, owner, requestId, caller, shares);
+    }
+
+    function _pushDepositEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+        uint40 last = $.lastDepositEpoch[controller];
+        if (last == epochId) return;
+        if ($.firstDepositEpoch[controller] == 0) {
+            $.firstDepositEpoch[controller] = epochId;
+        } else {
+            $.nextDepositEpoch[controller][last] = epochId;
+        }
+        $.lastDepositEpoch[controller] = epochId;
+    }
+
+    function _pushRedeemEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+        uint40 last = $.lastRedeemEpoch[controller];
+        if (last == epochId) return;
+        if ($.firstRedeemEpoch[controller] == 0) {
+            $.firstRedeemEpoch[controller] = epochId;
+        } else {
+            $.nextRedeemEpoch[controller][last] = epochId;
+        }
+        $.lastRedeemEpoch[controller] = epochId;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -324,7 +354,14 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         }
 
         $.totalRedeemClaimReserves += redeemAssets;
-        _recordSettlementClaims($, epochId, navSnapshot, supplySnapshot, depositShares, redeemAssets);
+        $.settlements[epochId] = SettlementData({
+            navSnapshot: navSnapshot,
+            totalSupplySnapshot: supplySnapshot,
+            totalDepositAssets: epoch.totalDepositAssets,
+            totalRedeemShares: epoch.totalRedeemShares,
+            depositSharesMinted: depositShares,
+            redeemAssetsReserved: redeemAssets
+        });
 
         $.activeAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
         epoch.settled = true;
@@ -357,53 +394,6 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         redeemAssets = redeemShares == 0 ? 0 : redeemShares.mulDiv(navSnapshot, supplySnapshot, Math.Rounding.Floor);
     }
 
-    function _recordSettlementClaims(
-        SemiAsyncRedeemVaultStorage storage $,
-        uint40 epochId,
-        uint256 navSnapshot,
-        uint256 supplySnapshot,
-        uint256 depositShares,
-        uint256 redeemAssets
-    ) internal {
-        EpochData storage epoch = $.epochs[epochId];
-        $.settlements[epochId] = SettlementData({
-            navSnapshot: navSnapshot,
-            totalSupplySnapshot: supplySnapshot,
-            totalDepositAssets: epoch.totalDepositAssets,
-            totalRedeemShares: epoch.totalRedeemShares,
-            depositSharesMinted: depositShares,
-            redeemAssetsReserved: redeemAssets
-        });
-
-        for (uint256 i = 0; i < epoch.depositControllers.length; i++) {
-            address controller = epoch.depositControllers[i];
-            uint256 assets = epoch.depositAssets[controller];
-            uint256 shares = epoch.totalDepositAssets == 0
-                ? 0
-                : assets.mulDiv(depositShares, epoch.totalDepositAssets, Math.Rounding.Floor);
-            $.depositClaims[epochId][controller] = DepositClaimData({
-                assetsClaimable: assets,
-                sharesClaimable: shares,
-                assetsClaimed: 0,
-                sharesClaimed: 0
-            });
-        }
-
-        for (uint256 i = 0; i < epoch.redeemControllers.length; i++) {
-            address controller = epoch.redeemControllers[i];
-            uint256 shares = epoch.redeemShares[controller];
-            uint256 assets = epoch.totalRedeemShares == 0
-                ? 0
-                : shares.mulDiv(redeemAssets, epoch.totalRedeemShares, Math.Rounding.Floor);
-            $.redeemClaims[epochId][controller] = RedeemClaimData({
-                sharesClaimable: shares,
-                assetsClaimable: assets,
-                sharesClaimed: 0,
-                assetsClaimed: 0
-            });
-        }
-    }
-
     /*//////////////////////////////////////////////////////////////
                                   CLAIMS
     //////////////////////////////////////////////////////////////*/
@@ -414,14 +404,15 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
 
     function deposit(uint256 assets, address receiver, address controller) public virtual returns (uint256 shares) {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        DepositClaimData storage claim = _getSemiAsyncRedeemVaultStorage().depositClaims[epochId][controller];
-        uint256 remainingAssets = claim.assetsClaimable - claim.assetsClaimed;
-        uint256 remainingShares = claim.sharesClaimable - claim.sharesClaimed;
+        DepositClaimData storage claim = $.depositClaims[epochId][controller];
+        uint256 remainingAssets = $.epochs[epochId].depositAssets[controller] - claim.assetsClaimed;
+        uint256 remainingShares = _remainingDepositShares($, epochId, controller);
         if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
         shares = assets == remainingAssets ? remainingShares : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Floor);
-        _consumeDepositClaim(claim, receiver, assets, shares);
+        _consumeDepositClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
     function mint(uint256 shares, address receiver) public override returns (uint256) {
@@ -430,23 +421,33 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
 
     function mint(uint256 shares, address receiver, address controller) public virtual returns (uint256 assets) {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        DepositClaimData storage claim = _getSemiAsyncRedeemVaultStorage().depositClaims[epochId][controller];
-        uint256 remainingAssets = claim.assetsClaimable - claim.assetsClaimed;
-        uint256 remainingShares = claim.sharesClaimable - claim.sharesClaimed;
+        DepositClaimData storage claim = $.depositClaims[epochId][controller];
+        uint256 remainingAssets = $.epochs[epochId].depositAssets[controller] - claim.assetsClaimed;
+        uint256 remainingShares = _remainingDepositShares($, epochId, controller);
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
         assets = shares == remainingShares ? remainingAssets : shares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Ceil);
-        _consumeDepositClaim(claim, receiver, assets, shares);
+        _consumeDepositClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
-    function _consumeDepositClaim(DepositClaimData storage claim, address receiver, uint256 assets, uint256 shares)
-        internal
-    {
+    function _consumeDepositClaim(
+        SemiAsyncRedeemVaultStorage storage $,
+        uint40 epochId,
+        address controller,
+        DepositClaimData storage claim,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal {
         if (assets == 0 || shares == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
         _transfer(staging(), receiver, shares);
+        if (claim.assetsClaimed == $.epochs[epochId].depositAssets[controller] || _remainingDepositShares($, epochId, controller) == 0) {
+            _advanceDepositEpoch($, controller, epochId);
+        }
         emit Deposit(_msgSender(), receiver, assets, shares);
     }
 
@@ -456,14 +457,15 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         returns (uint256 shares)
     {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        RedeemClaimData storage claim = _getSemiAsyncRedeemVaultStorage().redeemClaims[epochId][controller];
-        uint256 remainingAssets = claim.assetsClaimable - claim.assetsClaimed;
-        uint256 remainingShares = claim.sharesClaimable - claim.sharesClaimed;
+        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
+        uint256 remainingAssets = _remainingRedeemAssets($, epochId, controller);
+        uint256 remainingShares = $.epochs[epochId].redeemShares[controller] - claim.sharesClaimed;
         if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
         shares = assets == remainingAssets ? remainingShares : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Ceil);
-        _consumeRedeemClaim(claim, receiver, assets, shares);
+        _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
     function redeem(uint256 shares, address receiver, address controller)
@@ -472,42 +474,93 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         returns (uint256 assets)
     {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
+        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        RedeemClaimData storage claim = _getSemiAsyncRedeemVaultStorage().redeemClaims[epochId][controller];
-        uint256 remainingAssets = claim.assetsClaimable - claim.assetsClaimed;
-        uint256 remainingShares = claim.sharesClaimable - claim.sharesClaimed;
+        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
+        uint256 remainingAssets = _remainingRedeemAssets($, epochId, controller);
+        uint256 remainingShares = $.epochs[epochId].redeemShares[controller] - claim.sharesClaimed;
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
         assets = shares == remainingShares ? remainingAssets : shares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Floor);
-        _consumeRedeemClaim(claim, receiver, assets, shares);
+        _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
-    function _consumeRedeemClaim(RedeemClaimData storage claim, address receiver, uint256 assets, uint256 shares) internal {
+    function _consumeRedeemClaim(
+        SemiAsyncRedeemVaultStorage storage $,
+        uint40 epochId,
+        address controller,
+        RedeemClaimData storage claim,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal {
         if (assets == 0 || shares == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         $.totalRedeemClaimReserves -= assets;
         IERC20(asset()).safeTransfer(receiver, assets);
+        if (claim.sharesClaimed == $.epochs[epochId].redeemShares[controller] || _remainingRedeemAssets($, epochId, controller) == 0) {
+            _advanceRedeemEpoch($, controller, epochId);
+        }
         emit Withdraw(_msgSender(), receiver, _msgSender(), assets, shares);
+    }
+
+    function _remainingDepositShares(SemiAsyncRedeemVaultStorage storage $, uint40 epochId, address controller)
+        internal
+        view
+        returns (uint256)
+    {
+        EpochData storage epoch = $.epochs[epochId];
+        SettlementData storage settlement = $.settlements[epochId];
+        DepositClaimData storage claim = $.depositClaims[epochId][controller];
+        uint256 assets = epoch.depositAssets[controller];
+        uint256 totalShares = epoch.totalDepositAssets == 0
+            ? 0
+            : assets.mulDiv(settlement.depositSharesMinted, epoch.totalDepositAssets, Math.Rounding.Floor);
+        return totalShares - claim.sharesClaimed;
+    }
+
+    function _remainingRedeemAssets(SemiAsyncRedeemVaultStorage storage $, uint40 epochId, address controller)
+        internal
+        view
+        returns (uint256)
+    {
+        EpochData storage epoch = $.epochs[epochId];
+        SettlementData storage settlement = $.settlements[epochId];
+        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
+        uint256 shares = epoch.redeemShares[controller];
+        uint256 totalClaimAssets = epoch.totalRedeemShares == 0
+            ? 0
+            : shares.mulDiv(settlement.redeemAssetsReserved, epoch.totalRedeemShares, Math.Rounding.Floor);
+        return totalClaimAssets - claim.assetsClaimed;
     }
 
     function _oldestDepositClaimEpoch(address controller) internal view returns (uint40) {
         SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        for (uint40 id = 1; id < $.currentEpochId; id++) {
-            DepositClaimData storage candidate = $.depositClaims[id][controller];
-            if (candidate.assetsClaimable > candidate.assetsClaimed) return id;
-        }
-        return 0;
+        uint40 epochId = $.firstDepositEpoch[controller];
+        if (epochId == 0 || !$.epochs[epochId].settled) return 0;
+        return epochId;
     }
 
     function _oldestRedeemClaimEpoch(address controller) internal view returns (uint40) {
         SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        for (uint40 id = 1; id < $.currentEpochId; id++) {
-            RedeemClaimData storage candidate = $.redeemClaims[id][controller];
-            if (candidate.sharesClaimable > candidate.sharesClaimed) return id;
-        }
-        return 0;
+        uint40 epochId = $.firstRedeemEpoch[controller];
+        if (epochId == 0 || !$.epochs[epochId].settled) return 0;
+        return epochId;
+    }
+
+    function _advanceDepositEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+        if ($.firstDepositEpoch[controller] != epochId) return;
+        uint40 next = $.nextDepositEpoch[controller][epochId];
+        $.firstDepositEpoch[controller] = next;
+        if (next == 0) $.lastDepositEpoch[controller] = 0;
+    }
+
+    function _advanceRedeemEpoch(SemiAsyncRedeemVaultStorage storage $, address controller, uint40 epochId) internal {
+        if ($.firstRedeemEpoch[controller] != epochId) return;
+        uint40 next = $.nextRedeemEpoch[controller][epochId];
+        $.firstRedeemEpoch[controller] = next;
+        if (next == 0) $.lastRedeemEpoch[controller] = 0;
     }
 
     function _smartAccount() internal view virtual returns (address);

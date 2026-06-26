@@ -99,6 +99,29 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(alice), 0, "claim consumed");
     }
 
+    function test_settleEpoch_usesLazyPerEpochPricingForManyControllers() public {
+        address[8] memory users;
+        for (uint256 i = 0; i < users.length; i++) {
+            users[i] = makeAddr(string.concat("depositor", vm.toString(i)));
+            asset.mint(users[i], 100 * ONE);
+            _requestDeposit(users[i], (i + 1) * ONE);
+        }
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        uint256 gasBefore = gasleft();
+        _settle(1, 0, 0);
+        uint256 settleGas = gasBefore - gasleft();
+
+        assertLt(settleGas, 250_000, "settlement must not scale with controller count");
+        for (uint256 i = 0; i < users.length; i++) {
+            uint256 assets = (i + 1) * ONE;
+            assertEq(vault.claimableDepositRequest(1, users[i]), assets, "assets claim lazily from epoch totals");
+            assertEq(vault.maxMint(users[i]), assets, "shares claim lazily from settlement price");
+        }
+    }
+
     function test_requestRedeem_settleWithNettingAndClaimAssets() public {
         _requestDeposit(alice, 100 * ONE);
         vm.prank(safe);
