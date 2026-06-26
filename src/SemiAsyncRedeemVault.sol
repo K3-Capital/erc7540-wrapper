@@ -424,17 +424,10 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function deposit(uint256 assets, address receiver, address controller) public virtual returns (uint256 shares) {
-        if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        uint40 epochId = _oldestDepositClaimEpoch(controller);
-        if (epochId == 0) revert SA__NoClaimableEpoch();
-        DepositClaimData storage claim = $.depositClaims[epochId][controller];
-        uint256 remainingAssets = $.epochs[epochId].depositAssets[controller] - claim.assetsClaimed;
-        uint256 remainingShares = _remainingDepositShares($, epochId, controller);
-        if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
-        shares = assets == remainingAssets
-            ? remainingShares
-            : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Floor);
+        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
+            _loadDepositClaim(controller);
+        (uint256 remainingAssets, uint256 remainingShares) = _depositClaimRemaining($, epochId, controller, claim);
+        shares = _sharesForDepositClaim(assets, remainingAssets, remainingShares);
         _consumeDepositClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
@@ -443,18 +436,56 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function mint(uint256 shares, address receiver, address controller) public virtual returns (uint256 assets) {
+        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim) =
+            _loadDepositClaim(controller);
+        (uint256 remainingAssets, uint256 remainingShares) = _depositClaimRemaining($, epochId, controller, claim);
+        assets = _assetsForMintClaim(shares, remainingAssets, remainingShares);
+        _consumeDepositClaim($, epochId, controller, claim, receiver, assets, shares);
+    }
+
+    function _loadDepositClaim(address controller)
+        internal
+        view
+        returns (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, DepositClaimData storage claim)
+    {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        uint40 epochId = _oldestDepositClaimEpoch(controller);
+        $ = _getSemiAsyncRedeemVaultStorage();
+        epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        DepositClaimData storage claim = $.depositClaims[epochId][controller];
-        uint256 remainingAssets = $.epochs[epochId].depositAssets[controller] - claim.assetsClaimed;
-        uint256 remainingShares = _remainingDepositShares($, epochId, controller);
+        claim = $.depositClaims[epochId][controller];
+    }
+
+    function _depositClaimRemaining(
+        SemiAsyncRedeemVaultStorage storage $,
+        uint40 epochId,
+        address controller,
+        DepositClaimData storage claim
+    ) internal view returns (uint256 remainingAssets, uint256 remainingShares) {
+        remainingAssets =
+            $.epochs[epochId].depositAssets[controller] - claim.assetsClaimed;
+        remainingShares = _remainingDepositShares($, epochId, controller);
+    }
+
+    function _sharesForDepositClaim(uint256 assets, uint256 remainingAssets, uint256 remainingShares)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
+        return assets == remainingAssets
+            ? remainingShares
+            : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Floor);
+    }
+
+    function _assetsForMintClaim(uint256 shares, uint256 remainingAssets, uint256 remainingShares)
+        internal
+        pure
+        returns (uint256)
+    {
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
-        assets = shares == remainingShares
+        return shares == remainingShares
             ? remainingAssets
             : shares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Ceil);
-        _consumeDepositClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
     function _consumeDepositClaim(
@@ -480,33 +511,63 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
     }
 
     function withdraw(uint256 assets, address receiver, address controller) public override returns (uint256 shares) {
-        if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        uint40 epochId = _oldestRedeemClaimEpoch(controller);
-        if (epochId == 0) revert SA__NoClaimableEpoch();
-        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
-        uint256 remainingAssets = _remainingRedeemAssets($, epochId, controller);
-        uint256 remainingShares = $.epochs[epochId].redeemShares[controller] - claim.sharesClaimed;
-        if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
-        shares = assets == remainingAssets
-            ? remainingShares
-            : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Ceil);
+        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
+            _loadRedeemClaim(controller);
+        (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
+        shares = _sharesForWithdrawClaim(assets, remainingAssets, remainingShares);
         _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
     function redeem(uint256 shares, address receiver, address controller) public override returns (uint256 assets) {
+        (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
+            _loadRedeemClaim(controller);
+        (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
+        assets = _assetsForRedeemClaim(shares, remainingAssets, remainingShares);
+        _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
+    }
+
+    function _loadRedeemClaim(address controller)
+        internal
+        view
+        returns (SemiAsyncRedeemVaultStorage storage $, uint40 epochId, RedeemClaimData storage claim)
+    {
         if (!_isAuthorized(_msgSender(), controller)) revert SA__NotAuthorized();
-        SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
-        uint40 epochId = _oldestRedeemClaimEpoch(controller);
+        $ = _getSemiAsyncRedeemVaultStorage();
+        epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) revert SA__NoClaimableEpoch();
-        RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
-        uint256 remainingAssets = _remainingRedeemAssets($, epochId, controller);
-        uint256 remainingShares = $.epochs[epochId].redeemShares[controller] - claim.sharesClaimed;
+        claim = $.redeemClaims[epochId][controller];
+    }
+
+    function _redeemClaimRemaining(
+        SemiAsyncRedeemVaultStorage storage $,
+        uint40 epochId,
+        address controller,
+        RedeemClaimData storage claim
+    ) internal view returns (uint256 remainingAssets, uint256 remainingShares) {
+        remainingAssets = _remainingRedeemAssets($, epochId, controller);
+        remainingShares = $.epochs[epochId].redeemShares[controller] - claim.sharesClaimed;
+    }
+
+    function _sharesForWithdrawClaim(uint256 assets, uint256 remainingAssets, uint256 remainingShares)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
+        return assets == remainingAssets
+            ? remainingShares
+            : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Ceil);
+    }
+
+    function _assetsForRedeemClaim(uint256 shares, uint256 remainingAssets, uint256 remainingShares)
+        internal
+        pure
+        returns (uint256)
+    {
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
-        assets = shares == remainingShares
+        return shares == remainingShares
             ? remainingAssets
             : shares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Floor);
-        _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
     function _consumeRedeemClaim(
