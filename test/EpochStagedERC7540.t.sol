@@ -158,6 +158,53 @@ contract EpochStagedERC7540Test is Test {
         assertEq(bobShares, 100 * ONE, "deposit priced at same epoch NAV");
     }
 
+    function test_assetDonationsDoNotChangeEpochPricing() public {
+        asset.mint(address(this), 1_000 * ONE);
+        assertTrue(asset.transfer(address(vault), 10 * ONE));
+        assertTrue(asset.transfer(vault.staging(), 20 * ONE));
+
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        assertEq(vault.totalAssets(), 100 * ONE, "donations excluded from active NAV");
+        assertEq(vault.claimableDepositRequest(1, alice), 100 * ONE, "donations excluded from deposit claim assets");
+        assertEq(vault.maxMint(alice), 100 * ONE, "donations excluded from deposit claim shares");
+        assertEq(asset.balanceOf(vault.staging()), 20 * ONE, "staging donation is not swept into epoch settlement");
+        assertEq(asset.balanceOf(safe), 1_000_000 * ONE + 110 * ONE, "vault donation plus settled deposit surplus moves to safe");
+    }
+
+    function test_rescueCannotDrainRedeemClaimReserves() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(40 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 40 * ONE);
+
+        assertEq(vault.redeemClaimReserves(), 40 * ONE, "redeem reserve recorded");
+        vm.expectRevert(SemiAsyncRedeemVault.SA__InsufficientSettlementAssets.selector);
+        vault.rescue(address(asset), 1);
+
+        vm.prank(alice);
+        assertEq(vault.redeem(40 * ONE, alice, alice), 40 * ONE, "reserve remains claimable");
+    }
+
+    function test_rescueAssetSurplusSendsDonationsToSafe() public {
+        asset.mint(address(vault), 7 * ONE);
+        uint256 safeBefore = asset.balanceOf(safe);
+
+        vault.rescue(address(asset), 7 * ONE);
+
+        assertEq(asset.balanceOf(safe), safeBefore + 7 * ONE, "asset surplus belongs to the Safe");
+    }
+
     function test_settleEpoch_revertsWhenRedeemReserveIsUnderfunded() public {
         _requestDeposit(alice, 100 * ONE);
         vm.prank(safe);

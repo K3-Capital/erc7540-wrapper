@@ -118,6 +118,11 @@ contract SmartAccountWrapper is Initializable, Ownable2StepUpgradeable, Pausable
     }
 
     function rescue(address token, uint256 amount) external onlyOwner {
+        if (token == asset()) {
+            if (amount > assetSurplus()) revert SA__InsufficientSettlementAssets();
+            IERC20(token).safeTransfer(smartAccount(), amount);
+            return;
+        }
         IERC20(token).safeTransfer(owner(), amount);
     }
 

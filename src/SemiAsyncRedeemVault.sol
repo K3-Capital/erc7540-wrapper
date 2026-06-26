@@ -136,6 +136,16 @@ abstract contract SemiAsyncRedeemVault is Initializable, ERC4626Upgradeable, ISe
         return _getSemiAsyncRedeemVaultStorage().activeAssets;
     }
 
+    function redeemClaimReserves() public view returns (uint256) {
+        return _getSemiAsyncRedeemVaultStorage().totalRedeemClaimReserves;
+    }
+
+    function assetSurplus() public view returns (uint256) {
+        uint256 balance = IERC20(asset()).balanceOf(address(this));
+        uint256 reserves = redeemClaimReserves();
+        return balance > reserves ? balance - reserves : 0;
+    }
+
     function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256) {
         SemiAsyncRedeemVaultStorage storage $ = _getSemiAsyncRedeemVaultStorage();
         EpochData storage epoch = $.epochs[_toEpochId(requestId)];
