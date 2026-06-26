@@ -107,6 +107,61 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
     }
 
+    function test_operatorDepositAndRedeemAllowanceBranches() public {
+        vm.prank(alice);
+        vault.setOperator(bob, true);
+
+        vm.startPrank(bob);
+        asset.approve(address(vault), 25 * ONE);
+        uint256 requestId = vault.requestDeposit(25 * ONE, alice, bob);
+        vm.stopPrank();
+
+        assertEq(requestId, 1, "operator deposit uses current epoch");
+        assertEq(vault.pendingDepositRequest(1, alice), 25 * ONE, "deposit credited to controller");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        vault.deposit(25 * ONE, alice, alice);
+
+        vm.prank(alice);
+        vault.approve(bob, 10 * ONE);
+        vm.prank(bob);
+        uint256 redeemRequestId = vault.requestRedeem(10 * ONE, alice, alice);
+
+        assertEq(redeemRequestId, 2, "spender redeem uses current epoch");
+        assertEq(vault.pendingRedeemRequest(2, alice), 10 * ONE, "redeem credited to controller");
+        assertEq(vault.allowance(alice, bob), 0, "spender allowance consumed");
+    }
+
+    function test_sameEpochRepeatedRequestsDoNotDuplicateQueueEntries() public {
+        _requestDeposit(alice, 10 * ONE);
+        _requestDeposit(alice, 15 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        assertEq(vault.maxDeposit(alice), 25 * ONE, "same-epoch deposits are aggregated");
+        vm.prank(alice);
+        vault.deposit(25 * ONE, alice, alice);
+        assertEq(vault.maxDeposit(alice), 0, "single queue entry advanced after aggregate claim");
+
+        vm.prank(alice);
+        vault.requestRedeem(5 * ONE, alice, alice);
+        vm.prank(alice);
+        vault.requestRedeem(7 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 25 * ONE, 12 * ONE);
+
+        assertEq(vault.maxRedeem(alice), 12 * ONE, "same-epoch redeems are aggregated");
+        vm.prank(alice);
+        vault.redeem(12 * ONE, alice, alice);
+        assertEq(vault.maxRedeem(alice), 0, "single redeem queue entry advanced after aggregate claim");
+    }
+
     function test_settleEpoch_claimDepositAndMoveSurplusToSafe() public {
         _requestDeposit(alice, 100 * ONE);
 
@@ -146,6 +201,38 @@ contract EpochStagedERC7540Test is Test {
             assertEq(vault.claimableDepositRequest(1, users[i]), assets, "assets claim lazily from epoch totals");
             assertEq(vault.maxMint(users[i]), assets, "shares claim lazily from settlement price");
         }
+    }
+
+    function test_maxViewsReturnZeroWhenPausedOrNoClaimableEpoch() public {
+        assertEq(vault.maxDeposit(alice), 0, "no deposit claim");
+        assertEq(vault.maxMint(alice), 0, "no mint claim");
+        assertEq(vault.maxWithdraw(alice), 0, "no withdraw claim");
+        assertEq(vault.maxRedeem(alice), 0, "no redeem claim");
+        assertEq(vault.claimableRedeemRequest(1, alice), 0, "unsettled redeem request is not claimable");
+
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vault.pause();
+        assertEq(vault.maxDeposit(alice), 0, "paused deposit max");
+        assertEq(vault.maxMint(alice), 0, "paused mint max");
+        assertEq(vault.maxWithdraw(alice), 0, "paused withdraw max");
+        assertEq(vault.maxRedeem(alice), 0, "paused redeem max");
+        vault.unpause();
+
+        vm.prank(alice);
+        vault.deposit(100 * ONE, alice, alice);
+        vm.prank(alice);
+        vault.requestRedeem(25 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 25 * ONE);
+
+        vault.pause();
+        assertEq(vault.maxWithdraw(alice), 0, "paused withdraw claim max");
+        assertEq(vault.maxRedeem(alice), 0, "paused redeem claim max");
     }
 
     function test_requestRedeem_settleWithNettingAndClaimAssets() public {
@@ -260,6 +347,98 @@ contract EpochStagedERC7540Test is Test {
         vm.prank(safe);
         vm.expectRevert(SemiAsyncRedeemVault.SA__InvalidNavSnapshot.selector);
         vault.settleEpoch(2, 0);
+    }
+
+    function test_claimValidationReverts() public {
+        vm.startPrank(alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vault.deposit(1, alice, alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vault.mint(1, alice, alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vault.withdraw(1, alice, alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NoClaimableEpoch.selector);
+        vault.redeem(1, alice, alice);
+        vm.stopPrank();
+
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vault.deposit(1, bob, alice);
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vault.mint(1, bob, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
+        );
+        vault.deposit(101 * ONE, alice, alice);
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 101 * ONE, 100 * ONE)
+        );
+        vault.mint(101 * ONE, alice, alice);
+
+        vm.prank(alice);
+        vault.deposit(100 * ONE, alice, alice);
+        vm.prank(alice);
+        vault.requestRedeem(40 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 40 * ONE);
+
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vault.withdraw(1, bob, alice);
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__NotAuthorized.selector);
+        vault.redeem(1, bob, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE));
+        vault.withdraw(41 * ONE, alice, alice);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(SemiAsyncRedeemVault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE));
+        vault.redeem(41 * ONE, alice, alice);
+    }
+
+    function test_zeroRoundedClaimsRevertWithoutAdvancingQueue() public {
+        _requestDeposit(alice, 2);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        vm.prank(alice);
+        vault.deposit(2, alice, alice);
+
+        _requestDeposit(bob, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 3, 0);
+
+        assertEq(vault.maxDeposit(bob), 1, "asset claim exists");
+        assertEq(vault.maxMint(bob), 0, "share claim rounds to zero");
+        vm.prank(bob);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vault.deposit(1, bob, bob);
+        assertEq(vault.maxDeposit(bob), 1, "zero-share claim does not advance deposit queue");
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 1, 0);
+
+        assertEq(vault.maxRedeem(alice), 1, "share claim exists");
+        assertEq(vault.maxWithdraw(alice), 0, "asset claim rounds to zero");
+        vm.prank(alice);
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAmount.selector);
+        vault.redeem(1, alice, alice);
+        assertEq(vault.maxRedeem(alice), 1, "zero-asset claim does not advance redeem queue");
     }
 
     function test_assetDonationsDoNotChangeEpochPricing() public {

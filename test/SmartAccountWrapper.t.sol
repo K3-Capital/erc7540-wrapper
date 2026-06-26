@@ -77,6 +77,27 @@ contract SmartAccountWrapperTest is Test {
         assertTrue(vault.staging() != address(0));
     }
 
+    function test_uninitializedImplementationRejectsSafeOnlyCalls() public {
+        SmartAccountWrapper impl = new SmartAccountWrapper();
+        vm.expectRevert(SemiAsyncRedeemVault.SA__SmartAccountNotSet.selector);
+        impl.closeEpoch();
+    }
+
+    function test_initializeRejectsZeroAddresses() public {
+        SmartAccountWrapper impl = new SmartAccountWrapper();
+
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        impl.initialize(address(0), safe, address(asset), "SmartAccountWrapper", "SAW");
+
+        impl = new SmartAccountWrapper();
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        impl.initialize(address(this), address(0), address(asset), "SmartAccountWrapper", "SAW");
+
+        impl = new SmartAccountWrapper();
+        vm.expectRevert(SemiAsyncRedeemVault.SA__ZeroAddress.selector);
+        impl.initialize(address(this), safe, address(0), "SmartAccountWrapper", "SAW");
+    }
+
     function test_onlySafeCanCloseAndSettle() public {
         vm.prank(user);
         vm.expectRevert(SemiAsyncRedeemVault.SA__NotSmartAccount.selector);
