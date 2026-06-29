@@ -44,7 +44,7 @@ else
     exit 1
 fi
 
-REQUIRED_VARS="PRIVATE_KEY BEACON_ADDRESS OWNER"
+REQUIRED_VARS="DEPLOYER_ADDRESS BEACON_ADDRESS OWNER"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -58,11 +58,26 @@ if [ "$BROADCAST" -eq 1 ]; then
     MODE="BROADCAST"
 fi
 
+if [ "$BROADCAST" -eq 1 ] && [ -z "${CAST_WALLET_ACCOUNT:-}" ] && [ "${ANVIL_UNLOCKED:-}" != "1" ] && [ "${ANVIL_UNLOCKED:-}" != "true" ]; then
+    echo "Error: broadcast mode requires CAST_WALLET_ACCOUNT or ANVIL_UNLOCKED=true"
+    echo "Use 'cast wallet import <name> --interactive' and set CAST_WALLET_ACCOUNT=<name>."
+    exit 1
+fi
+
+SIGNER_ARGS=(--sender "$DEPLOYER_ADDRESS")
+if [ -n "${CAST_WALLET_ACCOUNT:-}" ]; then
+    SIGNER_ARGS+=(--account "$CAST_WALLET_ACCOUNT")
+elif [ "${ANVIL_UNLOCKED:-}" = "1" ] || [ "${ANVIL_UNLOCKED:-}" = "true" ]; then
+    SIGNER_ARGS+=(--unlocked)
+fi
+
 echo "=========================================="
 echo "Beacon Implementation Upgrade"
 echo "=========================================="
 echo "Mode:    $MODE"
 echo "Network: $NETWORK"
+echo "Deployer: $DEPLOYER_ADDRESS"
+echo "Signer:  ${CAST_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
 echo "Beacon:  $BEACON_ADDRESS"
 echo "Owner:   $OWNER"
 if [ -n "${WRAPPER_ADDRESS:-}" ]; then
@@ -94,7 +109,7 @@ else
     echo "Broadcasting upgrade..."
 fi
 
-FORGE_ARGS=(script/Upgrade.s.sol:Upgrade --rpc-url "$NETWORK" --private-key "$PRIVATE_KEY" -vvvv)
+FORGE_ARGS=(script/Upgrade.s.sol:Upgrade --rpc-url "$NETWORK" "${SIGNER_ARGS[@]}" -vvvv)
 if [ "$BROADCAST" -eq 1 ]; then
     FORGE_ARGS+=(--broadcast)
 fi

@@ -46,7 +46,7 @@ else
 fi
 
 # Validate required variables
-REQUIRED_VARS="PRIVATE_KEY DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
+REQUIRED_VARS="DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -60,11 +60,26 @@ if [ "$BROADCAST" -eq 1 ]; then
     MODE="BROADCAST"
 fi
 
+if [ "$BROADCAST" -eq 1 ] && [ -z "${CAST_WALLET_ACCOUNT:-}" ] && [ "${ANVIL_UNLOCKED:-}" != "1" ] && [ "${ANVIL_UNLOCKED:-}" != "true" ]; then
+    echo "Error: broadcast mode requires CAST_WALLET_ACCOUNT or ANVIL_UNLOCKED=true"
+    echo "Use 'cast wallet import <name> --interactive' and set CAST_WALLET_ACCOUNT=<name>."
+    exit 1
+fi
+
+SIGNER_ARGS=(--sender "$DEPLOYER_ADDRESS")
+if [ -n "${CAST_WALLET_ACCOUNT:-}" ]; then
+    SIGNER_ARGS+=(--account "$CAST_WALLET_ACCOUNT")
+elif [ "${ANVIL_UNLOCKED:-}" = "1" ] || [ "${ANVIL_UNLOCKED:-}" = "true" ]; then
+    SIGNER_ARGS+=(--unlocked)
+fi
+
 echo "=========================================="
 echo "CREATE3 Deployment Preview"
 echo "=========================================="
 echo "Mode:             $MODE"
 echo "Network:          $NETWORK"
+echo "Deployer:         $DEPLOYER_ADDRESS"
+echo "Signer account:   ${CAST_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
 echo "Salt:             $DEPLOY_SALT"
 echo ""
 echo "Parameters:"
@@ -110,7 +125,7 @@ else
     echo "Broadcasting deployment..."
 fi
 
-FORGE_ARGS=(script/Deploy.s.sol:DeployAll --rpc-url "$NETWORK" --private-key "$PRIVATE_KEY" -vvvv)
+FORGE_ARGS=(script/Deploy.s.sol:DeployAll --rpc-url "$NETWORK" "${SIGNER_ARGS[@]}" -vvvv)
 if [ "$BROADCAST" -eq 1 ]; then
     FORGE_ARGS+=(--broadcast)
 fi

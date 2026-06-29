@@ -19,18 +19,21 @@ else
     exit 1
 fi
 
-if [ -z "$DEPLOY_SALT" ]; then
-    echo "Error: DEPLOY_SALT not set in .env"
-    exit 1
-fi
+for var in DEPLOYER_ADDRESS DEPLOY_SALT; do
+    if [ -z "${!var:-}" ]; then
+        echo "Error: $var not set in .env"
+        exit 1
+    fi
+done
 
 NETWORK=${NETWORK:-base}
 
 echo "=========================================="
 echo "CREATE3 Address Prediction"
 echo "=========================================="
-echo "Network: $NETWORK"
-echo "Salt:    $DEPLOY_SALT"
+echo "Network:  $NETWORK"
+echo "Deployer: $DEPLOYER_ADDRESS"
+echo "Salt:     $DEPLOY_SALT"
 echo "=========================================="
 echo ""
 

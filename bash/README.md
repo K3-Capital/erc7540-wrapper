@@ -26,7 +26,8 @@ Required deployment variables:
 
 | Variable | Description |
 | --- | --- |
-| `PRIVATE_KEY` | Deployer/upgrader private key. Never commit it. |
+| `CAST_WALLET_ACCOUNT` | Foundry/cast encrypted wallet account name, e.g. `deployer`. |
+| `DEPLOYER_ADDRESS` | Public address of the deployer/upgrader account. |
 | `DEPLOY_SALT` | bytes32 CREATE3 salt for implementation/beacon/wrapper addresses. |
 | `OWNER` | Owner/admin for the beacon and wrapper. Usually a Safe. |
 | `SMART_ACCOUNT` | Smart account/Safe authorized to close and settle epochs. |
@@ -42,6 +43,15 @@ Optional post-deployment variables:
 | `BEACON_ADDRESS` | Existing beacon to upgrade or verify. |
 | `WRAPPER_ADDRESS` | Existing wrapper proxy to record/verify. |
 | `BASESCAN_API_KEY` / `ARBISCAN_API_KEY` | Block explorer API keys. |
+
+
+Create the deployer account in Foundry's encrypted keystore instead of writing a plaintext private key to `.env`:
+
+```bash
+cast wallet import deployer --interactive
+```
+
+Set `CAST_WALLET_ACCOUNT=deployer` and `DEPLOYER_ADDRESS=0x...` in `.env`. Foundry will prompt for the keystore password when `--broadcast` is used. For local Anvil-only testing, set `ANVIL_UNLOCKED=true` and `DEPLOYER_ADDRESS` to one of Anvil's unlocked accounts instead of using a cast wallet account.
 
 ## Preview deterministic addresses
 
