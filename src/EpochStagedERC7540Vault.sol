@@ -43,7 +43,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         uint256 redeemAssetsReserved;
     }
 
-    /// @custom:storage-location erc7201:zyfai.storage.EpochAsyncVault
+    /// @custom:storage-location erc7201:zyfai.storage.EpochStagedERC7540Vault
     struct EpochStagedERC7540VaultStorage {
         uint40 currentEpochId;
         uint40 frozenEpochId;
@@ -63,9 +63,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         mapping(address controller => mapping(uint40 epochId => uint40 nextEpochId)) nextRedeemEpoch;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("zyfai.storage.EpochAsyncVault")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("zyfai.storage.EpochStagedERC7540Vault")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant EPOCH_STAGED_ERC7540_VAULT_STORAGE_LOCATION =
-        0xfeab585c10efbf3bb169b09d6b661509bec6d52c999594b33373cb626354d100;
+        0xd3accdbc179cda4945ef979c0aa8c5182e1f4e53b9f461c3325066393080f200;
 
     error SA__AsyncOnly();
     error SA__NotAuthorized();
