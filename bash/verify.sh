@@ -92,9 +92,9 @@ case $CONTRACT_TYPE in
         ;;
 
     wrapper)
-        echo "Verifying SmartAccountProxy (wrapper)..."
+        echo "Verifying BeaconProxy (wrapper)..."
         forge verify-contract "$CONTRACT_ADDRESS" \
-            src/SmartAccountProxy.sol:SmartAccountProxy \
+            lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/beacon/BeaconProxy.sol:BeaconProxy \
             --chain "$CHAIN" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \

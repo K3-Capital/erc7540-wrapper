@@ -17,8 +17,7 @@ Step-by-step guide to deploy SmartAccountWrapper contracts using CREATE3 for det
            ▲
            │ delegatecall
 ┌──────────┴──────────┐
-│ SmartAccountProxy   │ ← User-facing contract
-│     (Wrapper)       │
+│ BeaconProxy         │ ← User-facing wrapper proxy
 └─────────────────────┘
 ```
 

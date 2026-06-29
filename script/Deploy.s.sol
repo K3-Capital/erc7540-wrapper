@@ -68,7 +68,7 @@ contract Deposit is Script {
         vm.startBroadcast(privateKey);
         uint256 amount = 600_000;
         IERC20(underlying).approve(wrapper, amount);
-        SmartAccountWrapper(wrapper).deposit(amount, owner);
+        SmartAccountWrapper(wrapper).requestDeposit(amount, owner, owner);
         vm.stopBroadcast();
     }
 }
@@ -81,7 +81,7 @@ contract Withdraw is Script {
         vm.createSelectFork("base");
         vm.startBroadcast(privateKey);
         uint256 amount = 100_000;
-        SmartAccountWrapper(wrapper).requestWithdraw(amount, owner, owner);
+        SmartAccountWrapper(wrapper).requestRedeem(amount, owner, owner);
         vm.stopBroadcast();
     }
 }
