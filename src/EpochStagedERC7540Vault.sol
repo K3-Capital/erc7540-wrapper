@@ -483,6 +483,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         pure
         returns (uint256)
     {
+        if (shares == 0) revert SA__ZeroAmount();
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
         return shares == remainingShares
             ? remainingAssets
@@ -498,10 +499,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         uint256 assets,
         uint256 shares
     ) internal {
-        if (assets == 0 || shares == 0) revert SA__ZeroAmount();
+        if (assets == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
-        _transfer(staging(), receiver, shares);
+        if (shares > 0) _transfer(staging(), receiver, shares);
         if (
             claim.assetsClaimed == $.epochs[epochId].depositAssets[controller]
                 || _remainingDepositShares($, epochId, controller) == 0
@@ -554,6 +555,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         pure
         returns (uint256)
     {
+        if (assets == 0) revert SA__ZeroAmount();
         if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
         return assets == remainingAssets
             ? remainingShares
@@ -580,11 +582,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         uint256 assets,
         uint256 shares
     ) internal {
-        if (assets == 0 || shares == 0) revert SA__ZeroAmount();
+        if (shares == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
         $.totalRedeemClaimReserves -= assets;
-        $.staging.transferToken(asset(), receiver, assets);
+        if (assets > 0) $.staging.transferToken(asset(), receiver, assets);
         if (
             claim.sharesClaimed == $.epochs[epochId].redeemShares[controller]
                 || _remainingRedeemAssets($, epochId, controller) == 0

@@ -414,7 +414,7 @@ contract EpochStagedERC7540Test is Test {
         vault.redeem(41 * ONE, alice, alice);
     }
 
-    function test_zeroRoundedClaimsRevertWithoutAdvancingQueue() public {
+    function test_zeroRoundedClaimsCanBeSkippedAndQueueAdvances() public {
         _requestDeposit(alice, 2);
         vm.prank(safe);
         vault.closeEpoch();
@@ -430,22 +430,33 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(bob), 1, "asset claim exists");
         assertEq(vault.maxMint(bob), 0, "share claim rounds to zero");
         vm.prank(bob);
-        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
-        vault.deposit(1, bob, bob);
-        assertEq(vault.maxDeposit(bob), 1, "zero-share claim does not advance deposit queue");
+        assertEq(vault.deposit(1, bob, bob), 0, "zero-share deposit claim can be skipped");
+        assertEq(vault.maxDeposit(bob), 0, "zero-share claim advances deposit queue");
+
+        _requestDeposit(bob, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 3, 0);
+        assertEq(vault.maxDeposit(bob), 3, "later deposit epoch is reachable after skip");
 
         vm.prank(alice);
         vault.requestRedeem(1, alice, alice);
         vm.prank(safe);
         vault.closeEpoch();
-        _settle(3, 1, 0);
+        _settle(4, 1, 0);
 
         assertEq(vault.maxRedeem(alice), 1, "share claim exists");
         assertEq(vault.maxWithdraw(alice), 0, "asset claim rounds to zero");
         vm.prank(alice);
-        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
-        vault.redeem(1, alice, alice);
-        assertEq(vault.maxRedeem(alice), 1, "zero-asset claim does not advance redeem queue");
+        assertEq(vault.redeem(1, alice, alice), 0, "zero-asset redeem claim can be skipped");
+        assertEq(vault.maxRedeem(alice), 0, "zero-asset claim advances redeem queue");
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(5, 3, 1);
+        assertEq(vault.maxRedeem(alice), 1, "later redeem epoch is reachable after skip");
     }
 
     function test_assetDonationsDoNotChangeEpochPricing() public {
@@ -537,4 +548,3 @@ contract EpochStagedERC7540Test is Test {
         vault.previewRedeem(1);
     }
 }
-
