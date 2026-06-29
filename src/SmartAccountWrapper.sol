@@ -144,6 +144,7 @@ contract SmartAccountWrapper is
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC7540).interfaceId
             || interfaceId == type(IERC7540Deposit).interfaceId || interfaceId == type(IERC7540Redeem).interfaceId
-            || interfaceId == type(IERC7540Operator).interfaceId || interfaceId == type(IERC7575).interfaceId;
+            || interfaceId == type(IERC7540Operator).interfaceId || interfaceId == type(IERC7575).interfaceId
+            || interfaceId == type(IERC1271).interfaceId;
     }
 }

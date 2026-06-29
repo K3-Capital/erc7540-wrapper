@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IERC7540Deposit, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
@@ -273,6 +274,28 @@ contract EpochStagedERC7540Test is Test {
         vm.prank(bob);
         uint256 bobShares = vault.deposit(100 * ONE, bob, bob);
         assertEq(bobShares, 100 * ONE, "deposit priced at same epoch NAV");
+    }
+
+    function test_operatorRedeemClaimEmitsControllerAsWithdrawOwner() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        vm.prank(alice);
+        vault.setOperator(bob, true);
+        vm.prank(alice);
+        vault.requestRedeem(40 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 40 * ONE);
+
+        vm.expectEmit(true, true, true, true);
+        emit IERC4626.Withdraw(bob, bob, alice, 40 * ONE, 40 * ONE);
+
+        vm.prank(bob);
+        vault.redeem(40 * ONE, bob, alice);
     }
 
     function test_depositAndMintOverloadsUseSenderAsController() public {

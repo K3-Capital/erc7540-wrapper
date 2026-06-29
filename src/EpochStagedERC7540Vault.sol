@@ -593,7 +593,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         ) {
             _advanceRedeemEpoch($, controller, epochId);
         }
-        emit Withdraw(_msgSender(), receiver, _msgSender(), assets, shares);
+        emit Withdraw(_msgSender(), receiver, controller, assets, shares);
     }
 
     function _remainingDepositShares(EpochStagedERC7540VaultStorage storage $, uint40 epochId, address controller)

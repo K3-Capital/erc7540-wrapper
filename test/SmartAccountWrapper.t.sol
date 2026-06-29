@@ -170,6 +170,7 @@ contract SmartAccountWrapperTest is Test {
 
     function test_supportsDeclaredInterfacesOnly() public view {
         assertTrue(vault.supportsInterface(type(IERC165).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC1271).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7540).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7540Deposit).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7540Redeem).interfaceId));
