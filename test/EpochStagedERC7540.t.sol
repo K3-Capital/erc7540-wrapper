@@ -534,6 +534,20 @@ contract EpochStagedERC7540Test is Test {
         assertEq(asset.balanceOf(safe), safeBefore + 7 * ONE, "asset surplus belongs to the Safe");
     }
 
+    function test_rescueStagedTokenOnlyAllowsUnrelatedTokens() public {
+        ERC20Mock otherToken = new ERC20Mock();
+        otherToken.mint(vault.staging(), 7 * ONE);
+
+        vault.rescueStagedToken(address(otherToken), 7 * ONE);
+        assertEq(otherToken.balanceOf(address(this)), 7 * ONE, "owner receives unrelated staged token");
+
+        vm.expectRevert(abi.encodeWithSelector(SmartAccountWrapper.SA__ReservedStagedToken.selector, address(asset)));
+        vault.rescueStagedToken(address(asset), 1);
+
+        vm.expectRevert(abi.encodeWithSelector(SmartAccountWrapper.SA__ReservedStagedToken.selector, address(vault)));
+        vault.rescueStagedToken(address(vault), 1);
+    }
+
     function test_stagingOnlyVaultCanTransferTokens() public {
         address staging_ = vault.staging();
         asset.mint(staging_, 1);
