@@ -13,6 +13,7 @@ import {IERC7540, IERC7540Deposit, IERC7540Redeem, IERC7540Operator} from "forge
 import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
 
 import {EpochStagedERC7540Vault} from "./EpochStagedERC7540Vault.sol";
+import {Staging} from "./Staging.sol";
 
 contract SmartAccountWrapper is
     Initializable,
@@ -27,6 +28,8 @@ contract SmartAccountWrapper is
     bytes4 private constant ERC1271_INVALID = 0xffffffff;
 
     event SmartAccountSet(address smartAccount);
+
+    error SA__ReservedStagedToken(address token);
 
     /// @custom:storage-location erc7201:zyfai.storage.SmartAccountWrapper
     struct SmartAccountWrapperStorage {
@@ -132,6 +135,11 @@ contract SmartAccountWrapper is
             return;
         }
         IERC20(token).safeTransfer(owner(), amount);
+    }
+
+    function rescueStagedToken(address token, uint256 amount) external onlyOwner {
+        if (token == asset() || token == address(this)) revert SA__ReservedStagedToken(token);
+        Staging(staging()).transferToken(token, owner(), amount);
     }
 
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
