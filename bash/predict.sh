@@ -2,15 +2,17 @@
 # =============================================================================
 # Predict Addresses - Preview CREATE3 addresses without deploying
 # =============================================================================
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Load environment variables
 if [ -f "$SCRIPT_DIR/.env" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/.env"
 elif [ -f "$PROJECT_ROOT/.env" ]; then
+    # shellcheck disable=SC1091
     source "$PROJECT_ROOT/.env"
 else
     echo "Error: .env file not found"
@@ -38,7 +40,7 @@ forge script script/Deploy.s.sol:PredictAddresses --rpc-url "$NETWORK" 2>&1 | te
 EXIT_CODE=${PIPESTATUS[0]}
 set -e
 
-if [ $EXIT_CODE -ne 0 ]; then
+if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
     echo "Prediction FAILED (exit code: $EXIT_CODE)"
     exit 1

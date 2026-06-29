@@ -1,17 +1,43 @@
 #!/bin/bash
 # =============================================================================
-# Deploy All - Deploys implementation, beacon, and wrapper in one tx via CREATE3
-# Deterministic addresses across all EVMs with same salt
+# Deploy All - Deploys implementation, beacon, and wrapper via CREATE3
+# Defaults to dry-run; pass --broadcast to send transactions.
 # =============================================================================
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+BROADCAST=0
+AUTO_YES=0
+for arg in "$@"; do
+    case "$arg" in
+        --broadcast)
+            BROADCAST=1
+            ;;
+        --yes|-y)
+            AUTO_YES=1
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--broadcast] [--yes]"
+            echo "  default      dry-run deployment only"
+            echo "  --broadcast  submit deployment transactions"
+            echo "  --yes        skip interactive confirmation (use only in automation)"
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown argument '$arg'"
+            exit 1
+            ;;
+    esac
+done
+
 # Load environment variables
 if [ -f "$SCRIPT_DIR/.env" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/.env"
 elif [ -f "$PROJECT_ROOT/.env" ]; then
+    # shellcheck disable=SC1091
     source "$PROJECT_ROOT/.env"
 else
     echo "Error: .env file not found"
@@ -22,18 +48,22 @@ fi
 # Validate required variables
 REQUIRED_VARS="PRIVATE_KEY DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
-    if [ -z "${!var}" ]; then
+    if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
         exit 1
     fi
 done
 
 NETWORK=${NETWORK:-base}
+MODE="DRY RUN"
+if [ "$BROADCAST" -eq 1 ]; then
+    MODE="BROADCAST"
+fi
 
-# Get predicted addresses first
 echo "=========================================="
 echo "CREATE3 Deployment Preview"
 echo "=========================================="
+echo "Mode:             $MODE"
 echo "Network:          $NETWORK"
 echo "Salt:             $DEPLOY_SALT"
 echo ""
@@ -46,79 +76,86 @@ echo "  Vault Symbol:     $VAULT_SYMBOL"
 echo "=========================================="
 echo ""
 
-# Run prediction script
-echo "Predicting addresses..."
 cd "$PROJECT_ROOT"
+
+echo "Predicting addresses..."
 set +e
-forge script script/Deploy.s.sol:PredictAddresses --rpc-url "$NETWORK" 2>&1 | tee /tmp/predict_output.txt
+forge script script/Deploy.s.sol:PredictAddresses --rpc-url "$NETWORK" 2>&1 | tee /tmp/erc7540_predict_output.txt
 PREDICT_EXIT=${PIPESTATUS[0]}
 set -e
 
-if [ $PREDICT_EXIT -ne 0 ]; then
+if [ "$PREDICT_EXIT" -ne 0 ]; then
     echo ""
     echo "Prediction FAILED. Check output above."
     exit 1
 fi
 
-grep -E "(Predicted|Implementation|Beacon|Wrapper|Salt):" /tmp/predict_output.txt || true
+grep -E "(Predicted|Implementation|Beacon|Wrapper|Salt):" /tmp/erc7540_predict_output.txt || true
 
 echo ""
 echo "=========================================="
 echo ""
 
-# Prompt for confirmation
-read -p "Deploy with these addresses? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Deployment cancelled"
-    exit 0
+if [ "$BROADCAST" -eq 1 ] && [ "$AUTO_YES" -ne 1 ]; then
+    read -r -p "Broadcast deployment with these parameters? (y/N) " REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+        echo "Deployment cancelled"
+        exit 0
+    fi
 fi
 
-echo ""
-echo "Deploying..."
+if [ "$BROADCAST" -ne 1 ]; then
+    echo "Dry-running deployment. No transaction will be broadcast."
+else
+    echo "Broadcasting deployment..."
+fi
+
+FORGE_ARGS=(script/Deploy.s.sol:DeployAll --rpc-url "$NETWORK" --private-key "$PRIVATE_KEY" -vvvv)
+if [ "$BROADCAST" -eq 1 ]; then
+    FORGE_ARGS+=(--broadcast)
+fi
+
 set +e
-forge script script/Deploy.s.sol:DeployAll \
-    --rpc-url "$NETWORK" \
-    --broadcast \
-    --private-key "$PRIVATE_KEY" \
-    -vvvv 2>&1 | tee /tmp/deploy_output.txt
+forge script "${FORGE_ARGS[@]}" 2>&1 | tee /tmp/erc7540_deploy_output.txt
 EXIT_CODE=${PIPESTATUS[0]}
 set -e
 
-RESULT=$(cat /tmp/deploy_output.txt)
+RESULT=$(cat /tmp/erc7540_deploy_output.txt)
 
-if [ $EXIT_CODE -ne 0 ]; then
+if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
     echo "=========================================="
-    echo "Deployment FAILED (exit code: $EXIT_CODE)"
+    echo "Deployment $MODE FAILED (exit code: $EXIT_CODE)"
     echo "=========================================="
     exit 1
 fi
 
-# Extract addresses from output
 IMPL_ADDR=$(echo "$RESULT" | grep -oE "Implementation: (0x[a-fA-F0-9]{40})" | tail -1 | cut -d' ' -f2)
 BEACON_ADDR=$(echo "$RESULT" | grep -oE "Beacon: (0x[a-fA-F0-9]{40})" | tail -1 | cut -d' ' -f2)
 WRAPPER_ADDR=$(echo "$RESULT" | grep -oE "Wrapper: (0x[a-fA-F0-9]{40})" | tail -1 | cut -d' ' -f2)
 
+echo ""
+echo "=========================================="
+echo "Deployment $MODE successful"
+echo "=========================================="
 if [ -n "$IMPL_ADDR" ] && [ -n "$BEACON_ADDR" ] && [ -n "$WRAPPER_ADDR" ]; then
-    echo ""
-    echo "=========================================="
-    echo "Deployment successful!"
-    echo "=========================================="
     echo "Implementation: $IMPL_ADDR"
     echo "Beacon:         $BEACON_ADDR"
     echo "Wrapper:        $WRAPPER_ADDR"
     echo ""
-    echo "Add to .env:"
-    echo "  BEACON_ADDRESS=$BEACON_ADDR"
-    echo "  WRAPPER_ADDRESS=$WRAPPER_ADDR"
-    echo ""
-    echo "Verify contracts:"
-    echo "  ./bash/verify.sh implementation $IMPL_ADDR"
-    echo "  ./bash/verify.sh beacon $BEACON_ADDR"
-    echo "  ./bash/verify.sh wrapper $WRAPPER_ADDR"
-    echo "=========================================="
+    if [ "$BROADCAST" -eq 1 ]; then
+        echo "Add to .env:"
+        echo "  BEACON_ADDRESS=$BEACON_ADDR"
+        echo "  WRAPPER_ADDRESS=$WRAPPER_ADDR"
+        echo ""
+        echo "Verify contracts:"
+        echo "  ./bash/verify.sh implementation $IMPL_ADDR"
+        echo "  ./bash/verify.sh beacon $BEACON_ADDR"
+        echo "  ./bash/verify.sh wrapper $WRAPPER_ADDR"
+    else
+        echo "Dry run only. Re-run with --broadcast to deploy on-chain."
+    fi
 else
-    echo ""
-    echo "Deployment completed. Check output above for addresses."
+    echo "Check output above for addresses."
 fi
+echo "=========================================="

@@ -2,15 +2,17 @@
 # =============================================================================
 # Verify Contracts on Block Explorer
 # =============================================================================
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Load environment variables
 if [ -f "$SCRIPT_DIR/.env" ]; then
+    # shellcheck disable=SC1091
     source "$SCRIPT_DIR/.env"
 elif [ -f "$PROJECT_ROOT/.env" ]; then
+    # shellcheck disable=SC1091
     source "$PROJECT_ROOT/.env"
 fi
 
@@ -27,9 +29,9 @@ usage() {
     echo "  wrapper        - SmartAccountWrapper proxy"
     echo ""
     echo "Examples:"
-    echo "  $0 beacon 0x94062886D060E3a80aaB17951c6E087a153e8AE8"
+    echo "  $0 beacon 0x..."
     echo "  $0 implementation 0x..."
-    echo "  $0 wrapper 0xf3Cfe4f445a6d4C95e02F9A66eDCFABF9Ea5E7cd"
+    echo "  $0 wrapper 0x..."
     exit 1
 }
 

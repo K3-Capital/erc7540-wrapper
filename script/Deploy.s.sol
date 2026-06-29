@@ -58,30 +58,30 @@ contract PredictAddresses is Script {
     }
 }
 
-contract Deposit is Script {
+contract RequestDeposit is Script {
     function run() public {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address owner = vm.envAddress("OWNER");
         address underlying = vm.envAddress("UNDERLYING_TOKEN");
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
-        vm.createSelectFork("base");
+        uint256 assets = vm.envUint("REQUEST_ASSETS");
+
         vm.startBroadcast(privateKey);
-        uint256 amount = 600_000;
-        IERC20(underlying).approve(wrapper, amount);
-        SmartAccountWrapper(wrapper).requestDeposit(amount, owner, owner);
+        IERC20(underlying).approve(wrapper, assets);
+        SmartAccountWrapper(wrapper).requestDeposit(assets, owner, owner);
         vm.stopBroadcast();
     }
 }
 
-contract Withdraw is Script {
+contract RequestRedeem is Script {
     function run() public {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address owner = vm.envAddress("OWNER");
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
-        vm.createSelectFork("base");
+        uint256 shares = vm.envUint("REQUEST_SHARES");
+
         vm.startBroadcast(privateKey);
-        uint256 amount = 100_000;
-        SmartAccountWrapper(wrapper).requestRedeem(amount, owner, owner);
+        SmartAccountWrapper(wrapper).requestRedeem(shares, owner, owner);
         vm.stopBroadcast();
     }
 }
