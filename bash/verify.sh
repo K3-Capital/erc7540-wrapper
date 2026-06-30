@@ -16,7 +16,9 @@ elif [ -f "$PROJECT_ROOT/.env" ]; then
     source "$PROJECT_ROOT/.env"
 fi
 
-NETWORK=${NETWORK:-base}
+NETWORK=${NETWORK:-}
+VERIFY_CHAIN=${VERIFY_CHAIN:-$NETWORK}
+ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 CONTRACT_TYPE=${1:-}
 CONTRACT_ADDRESS=${2:-}
 
@@ -39,34 +41,27 @@ if [ -z "$CONTRACT_TYPE" ] || [ -z "$CONTRACT_ADDRESS" ]; then
     usage
 fi
 
+if [ -z "$NETWORK" ]; then
+    echo "Error: NETWORK not set in .env"
+    exit 1
+fi
+
+if [ -z "$VERIFY_CHAIN" ]; then
+    echo "Error: VERIFY_CHAIN is empty; set VERIFY_CHAIN or NETWORK in .env"
+    exit 1
+fi
+
 cd "$PROJECT_ROOT"
 
-# Set chain and API key based on network
-case $NETWORK in
-    base)
-        CHAIN="base"
-        ETHERSCAN_API_KEY=${BASESCAN_API_KEY:-}
-        ;;
-    arbitrum_one)
-        CHAIN="arbitrum"
-        ETHERSCAN_API_KEY=${ARBISCAN_API_KEY:-}
-        ;;
-    *)
-        echo "Error: Unsupported network $NETWORK"
-        exit 1
-        ;;
-esac
-
 if [ -z "$ETHERSCAN_API_KEY" ]; then
-    echo "Warning: No API key set for $NETWORK verification"
-    echo "Set BASESCAN_API_KEY or ARBISCAN_API_KEY in .env"
+    echo "Warning: ETHERSCAN_API_KEY is not set; verification may fail"
 fi
 
 echo "=========================================="
 echo "Verifying Contract"
 echo "=========================================="
 echo "Network:  $NETWORK"
-echo "Chain:    $CHAIN"
+echo "Chain:    $VERIFY_CHAIN"
 echo "Type:     $CONTRACT_TYPE"
 echo "Address:  $CONTRACT_ADDRESS"
 echo "=========================================="
@@ -77,7 +72,7 @@ case $CONTRACT_TYPE in
         echo "Verifying UpgradeableBeacon..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon \
-            --chain "$CHAIN" \
+            --chain "$VERIFY_CHAIN" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch
@@ -87,7 +82,7 @@ case $CONTRACT_TYPE in
         echo "Verifying SmartAccountWrapper implementation..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             src/SmartAccountWrapper.sol:SmartAccountWrapper \
-            --chain "$CHAIN" \
+            --chain "$VERIFY_CHAIN" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch
@@ -97,7 +92,7 @@ case $CONTRACT_TYPE in
         echo "Verifying BeaconProxy (wrapper)..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/beacon/BeaconProxy.sol:BeaconProxy \
-            --chain "$CHAIN" \
+            --chain "$VERIFY_CHAIN" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch

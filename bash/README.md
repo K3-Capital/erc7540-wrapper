@@ -34,7 +34,7 @@ Required deployment variables:
 | `UNDERLYING_TOKEN` | ERC-20 asset used by this wrapper. |
 | `VAULT_NAME` | ERC-20 name for wrapper shares. |
 | `VAULT_SYMBOL` | ERC-20 symbol for wrapper shares. |
-| `NETWORK` | Foundry RPC endpoint alias, e.g. `base` or `arbitrum_one`. |
+| `NETWORK` | Foundry RPC endpoint alias from `foundry.toml`, e.g. `mainnet` or `sepolia`. |
 
 Optional post-deployment variables:
 
@@ -42,7 +42,8 @@ Optional post-deployment variables:
 | --- | --- |
 | `BEACON_ADDRESS` | Existing beacon to upgrade or verify. |
 | `WRAPPER_ADDRESS` | Existing wrapper proxy to record/verify. |
-| `BASESCAN_API_KEY` / `ARBISCAN_API_KEY` | Block explorer API keys. |
+| `ETHERSCAN_API_KEY` | Block explorer API key used by `forge verify-contract`. |
+| `VERIFY_CHAIN` | Optional verifier chain name. Defaults to `NETWORK`. |
 
 
 Create the deployer account in Foundry's encrypted keystore instead of writing a plaintext private key to `.env`:
@@ -69,7 +70,7 @@ Always dry-run first:
 ./bash/deploy.sh
 ```
 
-If the dry-run output and predicted addresses are correct, broadcast explicitly:
+If the dry-run output and deployment addresses are correct, broadcast explicitly:
 
 ```bash
 ./bash/deploy.sh --broadcast
