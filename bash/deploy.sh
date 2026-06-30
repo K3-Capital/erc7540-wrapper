@@ -46,7 +46,7 @@ else
 fi
 
 # Validate required variables
-REQUIRED_VARS="DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
+REQUIRED_VARS="NETWORK DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -54,7 +54,6 @@ for var in $REQUIRED_VARS; do
     fi
 done
 
-NETWORK=${NETWORK:-base}
 MODE="DRY RUN"
 if [ "$BROADCAST" -eq 1 ]; then
     MODE="BROADCAST"

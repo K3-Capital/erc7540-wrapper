@@ -94,6 +94,7 @@ Copy `.env.example` to `.env` and fill in values for the target chain. At minimu
 - `SMART_ACCOUNT` — smart account/Safe allowed to close and settle epochs.
 - `UNDERLYING_TOKEN` — ERC-20 asset.
 - `VAULT_NAME` / `VAULT_SYMBOL` — ERC-20 metadata for the vault share token.
+- `NETWORK` — Foundry RPC endpoint alias from `foundry.toml` such as `mainnet` or `sepolia`.
 - chain RPC and block explorer API keys as needed.
 
 ## Security notes

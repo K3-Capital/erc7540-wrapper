@@ -18,7 +18,7 @@ else
     exit 1
 fi
 
-REQUIRED_VARS="DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
+REQUIRED_VARS="NETWORK DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -26,7 +26,6 @@ for var in $REQUIRED_VARS; do
     fi
 done
 
-NETWORK=${NETWORK:-base}
 
 echo "=========================================="
 echo "CREATE3 Deployment Dry-Run Preview"
