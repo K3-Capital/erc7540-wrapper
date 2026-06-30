@@ -93,23 +93,26 @@ echo ""
 
 cd "$PROJECT_ROOT"
 
-echo "Predicting addresses..."
-set +e
-forge script script/Deploy.s.sol:PredictAddresses --rpc-url "$NETWORK" 2>&1 | tee /tmp/erc7540_predict_output.txt
-PREDICT_EXIT=${PIPESTATUS[0]}
-set -e
+if [ "$BROADCAST" -eq 1 ]; then
+    echo "Dry-running deployment before broadcast..."
+    set +e
+    forge script script/Deploy.s.sol:DeployAll \
+        --rpc-url "$NETWORK" \
+        "${SIGNER_ARGS[@]}" \
+        -vvvv 2>&1 | tee /tmp/erc7540_predict_output.txt
+    PREDICT_EXIT=${PIPESTATUS[0]}
+    set -e
 
-if [ "$PREDICT_EXIT" -ne 0 ]; then
+    if [ "$PREDICT_EXIT" -ne 0 ]; then
+        echo ""
+        echo "Dry-run preview FAILED. Check output above."
+        exit 1
+    fi
+
     echo ""
-    echo "Prediction FAILED. Check output above."
-    exit 1
+    echo "=========================================="
+    echo ""
 fi
-
-grep -E "(Predicted|Implementation|Beacon|Wrapper|Salt):" /tmp/erc7540_predict_output.txt || true
-
-echo ""
-echo "=========================================="
-echo ""
 
 if [ "$BROADCAST" -eq 1 ] && [ "$AUTO_YES" -ne 1 ]; then
     read -r -p "Broadcast deployment with these parameters? (y/N) " REPLY

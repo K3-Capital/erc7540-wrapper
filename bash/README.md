@@ -8,7 +8,7 @@ This directory contains thin bash wrappers around the Foundry deployment scripts
 
 | Script | Purpose | Default behavior |
 | --- | --- | --- |
-| `predict.sh` | Preview deterministic CREATE3 addresses | read-only |
+| `predict.sh` | Dry-run `DeployAll` and preview deployed addresses | read-only |
 | `deploy.sh` | Deploy implementation, beacon, and wrapper proxy | dry-run unless `--broadcast` is passed |
 | `upgrade.sh` | Deploy a new implementation and upgrade an existing beacon | dry-run unless `--broadcast` is passed |
 | `verify.sh` | Submit block-explorer verification | submits verification request |
@@ -53,13 +53,13 @@ cast wallet import deployer --interactive
 
 Set `CAST_WALLET_ACCOUNT=deployer` and `DEPLOYER_ADDRESS=0x...` in `.env`. Foundry will prompt for the keystore password when `--broadcast` is used. For local Anvil-only testing, set `ANVIL_UNLOCKED=true` and `DEPLOYER_ADDRESS` to one of Anvil's unlocked accounts instead of using a cast wallet account.
 
-## Preview deterministic addresses
+## Preview deployment addresses
 
 ```bash
 ./bash/predict.sh
 ```
 
-This runs `script/Deploy.s.sol:PredictAddresses` and does not send transactions.
+This runs the real `DeployAll` script in dry-run mode and does not send transactions.
 
 ## Deploy
 
@@ -115,9 +115,9 @@ The upgrade script deploys a fresh `SmartAccountWrapper` implementation and call
 ## Safety checklist before broadcasting
 
 - Confirm the selected `NETWORK` and RPC URL.
-- Confirm the signer behind `PRIVATE_KEY` is authorized for the action.
+- Confirm the cast wallet account or Anvil unlocked `DEPLOYER_ADDRESS` is authorized for the action.
 - Confirm `OWNER`, `SMART_ACCOUNT`, `UNDERLYING_TOKEN`, `VAULT_NAME`, and `VAULT_SYMBOL`.
-- Confirm CREATE3 predicted addresses are new/expected.
+- Confirm dry-run deployment addresses are new/expected.
 - For upgrades, confirm the beacon currently belongs to the intended deployment.
 - Run `forge test` and `forge build --sizes` on the exact commit being deployed.
 - Ensure the exact commit has received the required audit/security review.

@@ -74,7 +74,7 @@ forge build --sizes
 
 Deployment helpers live under `script/` and `bash/`.
 
-- `script/Deploy.s.sol:PredictAddresses` previews CREATE3 addresses.
+- `bash/predict.sh` dry-runs `DeployAll` and prints the addresses the current script path would deploy.
 - `script/Deploy.s.sol:DeployAll` deploys implementation, beacon, and wrapper proxy.
 - `script/Upgrade.s.sol:Upgrade` deploys a new implementation and upgrades an existing beacon.
 - `bash/*.sh` wrap those scripts with environment loading, previews, and block-explorer verification helpers.

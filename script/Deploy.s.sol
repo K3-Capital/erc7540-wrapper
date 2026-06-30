@@ -21,13 +21,7 @@ contract DeployAll is Script {
             salt: salt
         });
 
-        // Preview addresses before deployment
-        DeployHelper.DeployResult memory predicted = DeployHelper.predictAddresses(salt, deployer);
         console.log("Deployer:", deployer);
-        console.log("Predicted addresses:");
-        console.log("  Implementation:", predicted.implementation);
-        console.log("  Beacon:", predicted.beacon);
-        console.log("  Wrapper:", predicted.wrapper);
 
         vm.startBroadcast(deployer);
         DeployHelper.DeployResult memory result = DeployHelper.deployAll(params);
@@ -37,22 +31,6 @@ contract DeployAll is Script {
         console.log("  Implementation:", result.implementation);
         console.log("  Beacon:", result.beacon);
         console.log("  Wrapper:", result.wrapper);
-    }
-}
-
-/// @notice Preview CREATE3 addresses without deploying
-contract PredictAddresses is Script {
-    function run() public view {
-        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
-        bytes32 salt = vm.envBytes32("DEPLOY_SALT");
-
-        DeployHelper.DeployResult memory predicted = DeployHelper.predictAddresses(salt, deployer);
-        console.log("Deployer:", deployer);
-        console.log("Salt:", vm.toString(salt));
-        console.log("Predicted addresses:");
-        console.log("  Implementation:", predicted.implementation);
-        console.log("  Beacon:", predicted.beacon);
-        console.log("  Wrapper:", predicted.wrapper);
     }
 }
 
