@@ -17,7 +17,6 @@ elif [ -f "$PROJECT_ROOT/.env" ]; then
 fi
 
 NETWORK=${NETWORK:-}
-VERIFY_CHAIN=${VERIFY_CHAIN:-$NETWORK}
 ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 CONTRACT_TYPE=${1:-}
 CONTRACT_ADDRESS=${2:-}
@@ -46,10 +45,6 @@ if [ -z "$NETWORK" ]; then
     exit 1
 fi
 
-if [ -z "$VERIFY_CHAIN" ]; then
-    echo "Error: VERIFY_CHAIN is empty; set VERIFY_CHAIN or NETWORK in .env"
-    exit 1
-fi
 
 cd "$PROJECT_ROOT"
 
@@ -61,7 +56,6 @@ echo "=========================================="
 echo "Verifying Contract"
 echo "=========================================="
 echo "Network:  $NETWORK"
-echo "Chain:    $VERIFY_CHAIN"
 echo "Type:     $CONTRACT_TYPE"
 echo "Address:  $CONTRACT_ADDRESS"
 echo "=========================================="
@@ -72,7 +66,7 @@ case $CONTRACT_TYPE in
         echo "Verifying UpgradeableBeacon..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon \
-            --chain "$VERIFY_CHAIN" \
+            --chain "$NETWORK" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch
@@ -82,7 +76,7 @@ case $CONTRACT_TYPE in
         echo "Verifying SmartAccountWrapper implementation..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             src/SmartAccountWrapper.sol:SmartAccountWrapper \
-            --chain "$VERIFY_CHAIN" \
+            --chain "$NETWORK" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch
@@ -92,7 +86,7 @@ case $CONTRACT_TYPE in
         echo "Verifying BeaconProxy (wrapper)..."
         forge verify-contract "$CONTRACT_ADDRESS" \
             lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/beacon/BeaconProxy.sol:BeaconProxy \
-            --chain "$VERIFY_CHAIN" \
+            --chain "$NETWORK" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
             --watch

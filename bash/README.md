@@ -34,7 +34,7 @@ Required deployment variables:
 | `UNDERLYING_TOKEN` | ERC-20 asset used by this wrapper. |
 | `VAULT_NAME` | ERC-20 name for wrapper shares. |
 | `VAULT_SYMBOL` | ERC-20 symbol for wrapper shares. |
-| `NETWORK` | Foundry RPC endpoint alias from `foundry.toml`, e.g. `mainnet` or `sepolia`. |
+| `RPC_URL` | RPC endpoint used by deployment, preview, and upgrade scripts. |
 
 Optional post-deployment variables:
 
@@ -42,8 +42,8 @@ Optional post-deployment variables:
 | --- | --- |
 | `BEACON_ADDRESS` | Existing beacon to upgrade or verify. |
 | `WRAPPER_ADDRESS` | Existing wrapper proxy to record/verify. |
+| `NETWORK` | Block explorer chain name used by `forge verify-contract --chain`, e.g. `mainnet` or `sepolia`. |
 | `ETHERSCAN_API_KEY` | Block explorer API key used by `forge verify-contract`. |
-| `VERIFY_CHAIN` | Optional verifier chain name. Defaults to `NETWORK`. |
 
 
 Create the deployer account in Foundry's encrypted keystore instead of writing a plaintext private key to `.env`:
@@ -115,7 +115,7 @@ The upgrade script deploys a fresh `SmartAccountWrapper` implementation and call
 
 ## Safety checklist before broadcasting
 
-- Confirm the selected `NETWORK` and RPC URL.
+- Confirm the selected `RPC_URL` and verification `NETWORK`.
 - Confirm the cast wallet account or Anvil unlocked `DEPLOYER_ADDRESS` is authorized for the action.
 - Confirm `OWNER`, `SMART_ACCOUNT`, `UNDERLYING_TOKEN`, `VAULT_NAME`, and `VAULT_SYMBOL`.
 - Confirm dry-run deployment addresses are new/expected.
