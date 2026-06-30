@@ -9,8 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /// @notice Deploy implementation + beacon + wrapper in one tx using CREATE3
 contract DeployAll is Script {
     function run() public {
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(privateKey);
+        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
         bytes32 salt = vm.envBytes32("DEPLOY_SALT");
 
         DeployHelper.DeployParams memory params = DeployHelper.DeployParams({
@@ -22,15 +21,9 @@ contract DeployAll is Script {
             salt: salt
         });
 
-        // Preview addresses before deployment
-        DeployHelper.DeployResult memory predicted = DeployHelper.predictAddresses(salt, deployer);
         console.log("Deployer:", deployer);
-        console.log("Predicted addresses:");
-        console.log("  Implementation:", predicted.implementation);
-        console.log("  Beacon:", predicted.beacon);
-        console.log("  Wrapper:", predicted.wrapper);
 
-        vm.startBroadcast(privateKey);
+        vm.startBroadcast(deployer);
         DeployHelper.DeployResult memory result = DeployHelper.deployAll(params);
         vm.stopBroadcast();
 
@@ -41,47 +34,30 @@ contract DeployAll is Script {
     }
 }
 
-/// @notice Preview CREATE3 addresses without deploying
-contract PredictAddresses is Script {
-    function run() public view {
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(privateKey);
-        bytes32 salt = vm.envBytes32("DEPLOY_SALT");
-
-        DeployHelper.DeployResult memory predicted = DeployHelper.predictAddresses(salt, deployer);
-        console.log("Deployer:", deployer);
-        console.log("Salt:", vm.toString(salt));
-        console.log("Predicted addresses:");
-        console.log("  Implementation:", predicted.implementation);
-        console.log("  Beacon:", predicted.beacon);
-        console.log("  Wrapper:", predicted.wrapper);
-    }
-}
-
-contract Deposit is Script {
+contract RequestDeposit is Script {
     function run() public {
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
         address owner = vm.envAddress("OWNER");
         address underlying = vm.envAddress("UNDERLYING_TOKEN");
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
-        vm.createSelectFork("base");
-        vm.startBroadcast(privateKey);
-        uint256 amount = 600_000;
-        IERC20(underlying).approve(wrapper, amount);
-        SmartAccountWrapper(wrapper).requestDeposit(amount, owner, owner);
+        uint256 assets = vm.envUint("REQUEST_ASSETS");
+
+        vm.startBroadcast(deployer);
+        IERC20(underlying).approve(wrapper, assets);
+        SmartAccountWrapper(wrapper).requestDeposit(assets, owner, owner);
         vm.stopBroadcast();
     }
 }
 
-contract Withdraw is Script {
+contract RequestRedeem is Script {
     function run() public {
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
         address owner = vm.envAddress("OWNER");
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
-        vm.createSelectFork("base");
-        vm.startBroadcast(privateKey);
-        uint256 amount = 100_000;
-        SmartAccountWrapper(wrapper).requestRedeem(amount, owner, owner);
+        uint256 shares = vm.envUint("REQUEST_SHARES");
+
+        vm.startBroadcast(deployer);
+        SmartAccountWrapper(wrapper).requestRedeem(shares, owner, owner);
         vm.stopBroadcast();
     }
 }

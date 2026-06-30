@@ -54,16 +54,6 @@ library DeployHelper {
         _verifyDeployment(result, params);
     }
 
-    /// @notice Predict addresses before deployment
-    /// @param salt The CREATE3 salt
-    /// @param deployer The address that will deploy (msg.sender during broadcast)
-    function predictAddresses(bytes32 salt, address deployer) internal pure returns (DeployResult memory result) {
-        result.implementation =
-            CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "implementation")), deployer);
-        result.beacon = CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "beacon")), deployer);
-        result.wrapper = CREATE3.predictDeterministicAddress(keccak256(abi.encodePacked(salt, "wrapper")), deployer);
-    }
-
     function _verifyDeployment(DeployResult memory result, DeployParams memory params) private view {
         UpgradeableBeacon beacon = UpgradeableBeacon(result.beacon);
         require(beacon.implementation() == result.implementation, "Beacon impl mismatch");
