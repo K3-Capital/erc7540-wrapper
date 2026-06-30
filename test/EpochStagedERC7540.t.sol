@@ -181,6 +181,17 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(alice), 0, "claim consumed");
     }
 
+    function test_settleEpoch_revertsOnBootstrapNavSnapshot() public {
+        _requestDeposit(alice, 100 * ONE);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.prank(safe);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InvalidNavSnapshot.selector);
+        vault.settleEpoch(1, 1);
+    }
+
     function test_settleEpoch_usesLazyPerEpochPricingForManyControllers() public {
         address[8] memory users;
         for (uint256 i = 0; i < users.length; i++) {
