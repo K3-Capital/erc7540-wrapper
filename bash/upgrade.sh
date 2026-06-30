@@ -44,7 +44,7 @@ else
     exit 1
 fi
 
-REQUIRED_VARS="NETWORK DEPLOYER_ADDRESS BEACON_ADDRESS OWNER"
+REQUIRED_VARS="RPC_URL DEPLOYER_ADDRESS BEACON_ADDRESS OWNER"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -74,7 +74,10 @@ echo "=========================================="
 echo "Beacon Implementation Upgrade"
 echo "=========================================="
 echo "Mode:    $MODE"
-echo "Network: $NETWORK"
+echo "RPC URL:  $RPC_URL"
+if [ -n "${NETWORK:-}" ]; then
+    echo "Verify network: $NETWORK"
+fi
 echo "Deployer: $DEPLOYER_ADDRESS"
 echo "Signer:  ${CAST_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
 echo "Beacon:  $BEACON_ADDRESS"
@@ -108,7 +111,7 @@ else
     echo "Broadcasting upgrade..."
 fi
 
-FORGE_ARGS=(script/Upgrade.s.sol:Upgrade --rpc-url "$NETWORK" "${SIGNER_ARGS[@]}" -vvvv)
+FORGE_ARGS=(script/Upgrade.s.sol:Upgrade --rpc-url "$RPC_URL" "${SIGNER_ARGS[@]}" -vvvv)
 if [ "$BROADCAST" -eq 1 ]; then
     FORGE_ARGS+=(--broadcast)
 fi

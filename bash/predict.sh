@@ -18,7 +18,7 @@ else
     exit 1
 fi
 
-REQUIRED_VARS="NETWORK DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
+REQUIRED_VARS="RPC_URL DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -30,7 +30,10 @@ done
 echo "=========================================="
 echo "CREATE3 Deployment Dry-Run Preview"
 echo "=========================================="
-echo "Network:          $NETWORK"
+echo "RPC URL:          $RPC_URL"
+if [ -n "${NETWORK:-}" ]; then
+    echo "Verify network:   $NETWORK"
+fi
 echo "Deployer:         $DEPLOYER_ADDRESS"
 echo "Salt:             $DEPLOY_SALT"
 echo "Owner:            $OWNER"
@@ -44,7 +47,7 @@ echo ""
 cd "$PROJECT_ROOT"
 set +e
 forge script script/Deploy.s.sol:DeployAll \
-    --rpc-url "$NETWORK" \
+    --rpc-url "$RPC_URL" \
     --sender "$DEPLOYER_ADDRESS" \
     -vvvv 2>&1 | tee /tmp/erc7540_predict_output.txt
 EXIT_CODE=${PIPESTATUS[0]}

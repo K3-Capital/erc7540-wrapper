@@ -46,7 +46,7 @@ else
 fi
 
 # Validate required variables
-REQUIRED_VARS="NETWORK DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
+REQUIRED_VARS="RPC_URL DEPLOYER_ADDRESS DEPLOY_SALT OWNER SMART_ACCOUNT UNDERLYING_TOKEN VAULT_NAME VAULT_SYMBOL"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -76,7 +76,10 @@ echo "=========================================="
 echo "CREATE3 Deployment Preview"
 echo "=========================================="
 echo "Mode:             $MODE"
-echo "Network:          $NETWORK"
+echo "RPC URL:          $RPC_URL"
+if [ -n "${NETWORK:-}" ]; then
+    echo "Verify network:   $NETWORK"
+fi
 echo "Deployer:         $DEPLOYER_ADDRESS"
 echo "Signer account:   ${CAST_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
 echo "Salt:             $DEPLOY_SALT"
@@ -96,7 +99,7 @@ if [ "$BROADCAST" -eq 1 ]; then
     echo "Dry-running deployment before broadcast..."
     set +e
     forge script script/Deploy.s.sol:DeployAll \
-        --rpc-url "$NETWORK" \
+        --rpc-url "$RPC_URL" \
         "${SIGNER_ARGS[@]}" \
         -vvvv 2>&1 | tee /tmp/erc7540_predict_output.txt
     PREDICT_EXIT=${PIPESTATUS[0]}
@@ -127,7 +130,7 @@ else
     echo "Broadcasting deployment..."
 fi
 
-FORGE_ARGS=(script/Deploy.s.sol:DeployAll --rpc-url "$NETWORK" "${SIGNER_ARGS[@]}" -vvvv)
+FORGE_ARGS=(script/Deploy.s.sol:DeployAll --rpc-url "$RPC_URL" "${SIGNER_ARGS[@]}" -vvvv)
 if [ "$BROADCAST" -eq 1 ]; then
     FORGE_ARGS+=(--broadcast)
 fi
