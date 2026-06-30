@@ -226,6 +226,55 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.balanceOf(alice), 100 * ONE, "claimed shares received");
     }
 
+    function test_settleEpoch_allowsEmptyNonBootstrapEpochAndNextEpochProgresses() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        assertEq(vault.totalSupply(), 100 * ONE, "bootstrap supply exists");
+        assertEq(vault.totalAssets(), 100 * ONE, "bootstrap NAV exists");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "empty non-bootstrap settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 3, "ops can advance past empty non-bootstrap epoch");
+        assertEq(vault.totalSupply(), 100 * ONE, "empty non-bootstrap epoch does not change supply");
+        assertEq(vault.totalAssets(), 100 * ONE, "empty non-bootstrap epoch preserves reported NAV");
+
+        _requestDeposit(bob, 50 * ONE);
+        assertEq(vault.pendingDepositRequest(3, bob), 50 * ONE, "new deposit enters next epoch after empty epoch");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 100 * ONE, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "following settlement clears frozen epoch");
+        assertEq(vault.maxDeposit(bob), 50 * ONE, "following deposit remains claimable");
+    }
+
+    function test_closeAndSettleEpoch_whenPaused() public {
+        _requestDeposit(alice, 100 * ONE);
+        vault.pause();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "paused settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 2, "paused ops can advance epoch");
+        assertEq(vault.maxDeposit(alice), 0, "claims remain blocked in max views while paused");
+
+        vault.unpause();
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "claim becomes visible after unpause");
+
+        uint256 shares = _claimDeposit(alice, 100 * ONE);
+        assertEq(shares, 100 * ONE, "deposit remains claimable after paused settlement");
+    }
+
     function test_settleEpoch_usesLazyPerEpochPricingForManyControllers() public {
         address[8] memory users;
         for (uint256 i = 0; i < users.length; i++) {
