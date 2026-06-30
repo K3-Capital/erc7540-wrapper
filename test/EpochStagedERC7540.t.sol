@@ -181,6 +181,100 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(alice), 0, "claim consumed");
     }
 
+    function test_settleEpoch_revertsOnBootstrapNavSnapshot() public {
+        _requestDeposit(alice, 100 * ONE);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.prank(safe);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InvalidNavSnapshot.selector);
+        vault.settleEpoch(1, 1);
+
+        assertEq(vault.frozenEpochId(), 1, "failed bootstrap settlement keeps epoch frozen for retry");
+        _settle(1, 0, 0);
+        assertEq(vault.frozenEpochId(), 0, "corrected bootstrap settlement clears frozen epoch");
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "corrected bootstrap settlement remains claimable");
+    }
+
+    function test_settleEpoch_allowsEmptyBootstrapZeroNavAndNextEpochProgresses() public {
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        _settle(1, 0, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "empty zero-NAV bootstrap settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 2, "next epoch remains open");
+        assertEq(vault.totalAssets(), 0, "empty bootstrap keeps NAV at zero");
+        assertEq(vault.totalSupply(), 0, "empty bootstrap keeps supply at zero");
+
+        _requestDeposit(alice, 100 * ONE);
+        assertEq(
+            vault.pendingDepositRequest(2, alice), 100 * ONE, "new deposit enters next epoch after empty settlement"
+        );
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 0, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "second zero-NAV bootstrap settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 3, "ops can continue after second settlement");
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "deposit remains claimable after second settlement");
+
+        uint256 shares = _claimDeposit(alice, 100 * ONE);
+        assertEq(shares, 100 * ONE, "first funded epoch still mints 1:1 after empty epoch");
+        assertEq(vault.balanceOf(alice), 100 * ONE, "claimed shares received");
+    }
+
+    function test_settleEpoch_allowsEmptyNonBootstrapEpochAndNextEpochProgresses() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        assertEq(vault.totalSupply(), 100 * ONE, "bootstrap supply exists");
+        assertEq(vault.totalAssets(), 100 * ONE, "bootstrap NAV exists");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "empty non-bootstrap settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 3, "ops can advance past empty non-bootstrap epoch");
+        assertEq(vault.totalSupply(), 100 * ONE, "empty non-bootstrap epoch does not change supply");
+        assertEq(vault.totalAssets(), 100 * ONE, "empty non-bootstrap epoch preserves reported NAV");
+
+        _requestDeposit(bob, 50 * ONE);
+        assertEq(vault.pendingDepositRequest(3, bob), 50 * ONE, "new deposit enters next epoch after empty epoch");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 100 * ONE, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "following settlement clears frozen epoch");
+        assertEq(vault.maxDeposit(bob), 50 * ONE, "following deposit remains claimable");
+    }
+
+    function test_closeAndSettleEpoch_whenPaused() public {
+        _requestDeposit(alice, 100 * ONE);
+        vault.pause();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "paused settlement clears frozen epoch");
+        assertEq(vault.currentEpochId(), 2, "paused ops can advance epoch");
+        assertEq(vault.maxDeposit(alice), 0, "claims remain blocked in max views while paused");
+
+        vault.unpause();
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "claim becomes visible after unpause");
+
+        uint256 shares = _claimDeposit(alice, 100 * ONE);
+        assertEq(shares, 100 * ONE, "deposit remains claimable after paused settlement");
+    }
+
     function test_settleEpoch_usesLazyPerEpochPricingForManyControllers() public {
         address[8] memory users;
         for (uint256 i = 0; i < users.length; i++) {
@@ -572,6 +666,11 @@ contract EpochStagedERC7540Test is Test {
         vm.prank(safe);
         vm.expectRevert(EpochStagedERC7540Vault.SA__InsufficientSettlementAssets.selector);
         vault.settleEpoch(2, 100 * ONE);
+
+        assertEq(vault.frozenEpochId(), 2, "underfunded settlement keeps epoch frozen for retry");
+        _settle(2, 100 * ONE, 80 * ONE);
+        assertEq(vault.frozenEpochId(), 0, "funded retry clears frozen epoch");
+        assertEq(vault.maxRedeem(alice), 80 * ONE, "redeem remains claimable after funded retry");
     }
 
     function test_previewFunctionsRevertBecauseVaultIsFullyAsync() public {

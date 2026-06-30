@@ -349,6 +349,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (epoch.settled) revert SA__EpochAlreadySettled(epochId);
 
         uint256 supplySnapshot = totalSupply();
+        if (supplySnapshot == 0 && navSnapshot != 0) revert SA__InvalidNavSnapshot();
         if (supplySnapshot != 0 && navSnapshot == 0) revert SA__InvalidNavSnapshot();
         if (epoch.totalRedeemShares > supplySnapshot) revert SA__InvalidNavSnapshot();
 
