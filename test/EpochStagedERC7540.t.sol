@@ -370,6 +370,39 @@ contract EpochStagedERC7540Test is Test {
         assertEq(bobShares, 100 * ONE, "deposit priced at same epoch NAV");
     }
 
+    function test_settleEpoch_requiresOnlyNetRedeemFundingShortfall() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(80 * ONE, alice, alice);
+        _requestDeposit(bob, 30 * ONE);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        uint256 safeBalanceBeforeSettlement = asset.balanceOf(safe);
+
+        vm.startPrank(safe);
+        assertTrue(asset.transfer(address(vault), 50 * ONE - 1));
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InsufficientSettlementAssets.selector);
+        vault.settleEpoch(2, 100 * ONE);
+        assertTrue(asset.transfer(address(vault), 1));
+        vault.settleEpoch(2, 100 * ONE);
+        vm.stopPrank();
+
+        assertEq(vault.maxRedeem(alice), 80 * ONE, "redeem bucket fully funded by deposits plus net shortfall");
+        assertEq(vault.maxDeposit(bob), 30 * ONE, "deposit bucket settled at same NAV");
+        assertEq(asset.balanceOf(vault.staging()), 80 * ONE, "redeem reserves are staged after net settlement");
+        assertEq(
+            asset.balanceOf(safe), safeBalanceBeforeSettlement - 50 * ONE, "Safe only provides net redeem shortfall"
+        );
+        assertEq(vault.totalAssets(), 50 * ONE, "post-settlement active NAV nets deposits and redemptions");
+    }
+
     function test_operatorRedeemClaimEmitsControllerAsWithdrawOwner() public {
         _requestDeposit(alice, 100 * ONE);
         vm.prank(safe);
