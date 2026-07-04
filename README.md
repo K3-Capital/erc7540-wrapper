@@ -44,6 +44,16 @@ Settlement + user claims
 
 The wrapper is upgradeable through an `UpgradeableBeacon`; all beacon upgrade authority belongs to the configured owner.
 
+## Licensing
+
+This repository uses mixed licensing on a file-by-file basis:
+
+- files marked `SPDX-License-Identifier: LicenseRef-K3-Capital-Business-1.0` are K3-owned business-licensed code and require a separate written license from K3 Capital for any use, copying, modification, distribution, deployment, or other exploitation;
+- files marked `SPDX-License-Identifier: MIT` remain under the MIT license, including lightly modified upstream-derived Solidity and deployment helper files; and
+- third-party dependencies under `lib/` remain under their own licenses.
+
+See [`LICENSE.md`](LICENSE.md) and [`NOTICE.md`](NOTICE.md) for the controlling license terms and file classification notes.
+
 ## Development
 
 ### Build

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-K3-Capital-Business-1.0
 pragma solidity ^0.8.0;
 
 /// @title Epoch-staged ERC-7540 vault interface
