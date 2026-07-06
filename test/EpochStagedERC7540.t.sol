@@ -11,6 +11,12 @@ import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
 import {EpochStagedERC7540Vault} from "../src/EpochStagedERC7540Vault.sol";
 import {Staging} from "../src/Staging.sol";
 
+contract ZeroReceivedToken is ERC20Mock {
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
+        return true;
+    }
+}
+
 contract EpochStagedERC7540Test is Test {
     SmartAccountWrapper public vault;
     ERC20Mock public asset;
@@ -161,6 +167,60 @@ contract EpochStagedERC7540Test is Test {
         vm.prank(alice);
         vault.redeem(12 * ONE, alice, alice);
         assertEq(vault.maxRedeem(alice), 0, "single redeem queue entry advanced after aggregate claim");
+    }
+
+    function test_multiEpochDepositQueueLinksAndExposesNextEpochAfterHeadClaim() public {
+        _requestDeposit(alice, 10 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        _requestDeposit(alice, 15 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 10 * ONE, 0);
+
+        assertEq(vault.maxDeposit(alice), 10 * ONE, "oldest settled deposit epoch is exposed first");
+        assertEq(vault.claimableDepositRequest(2, alice), 15 * ONE, "later epoch is settled but not queue head");
+
+        vm.prank(alice);
+        vault.deposit(10 * ONE, alice, alice);
+
+        assertEq(vault.maxDeposit(alice), 15 * ONE, "next linked deposit epoch is exposed after head claim");
+        vm.prank(alice);
+        vault.deposit(15 * ONE, alice, alice);
+        assertEq(vault.maxDeposit(alice), 0, "deposit queue is empty after second claim");
+    }
+
+    function test_multiEpochRedeemQueueLinksAndExposesNextEpochAfterHeadClaim() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(10 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 10 * ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(15 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 90 * ONE, 15 * ONE);
+
+        assertEq(vault.maxRedeem(alice), 10 * ONE, "oldest settled redeem epoch is exposed first");
+        assertEq(vault.claimableRedeemRequest(3, alice), 15 * ONE, "later epoch is settled but not queue head");
+
+        vm.prank(alice);
+        vault.redeem(10 * ONE, alice, alice);
+
+        assertEq(vault.maxRedeem(alice), 15 * ONE, "next linked redeem epoch is exposed after head claim");
+        vm.prank(alice);
+        vault.redeem(15 * ONE, alice, alice);
+        assertEq(vault.maxRedeem(alice), 0, "redeem queue is empty after second claim");
     }
 
     function test_settleEpoch_claimDepositAndMoveSurplusToSafe() public {
@@ -562,6 +622,55 @@ contract EpochStagedERC7540Test is Test {
             abi.encodeWithSelector(EpochStagedERC7540Vault.SA__ExceedsClaimable.selector, 41 * ONE, 40 * ONE)
         );
         vault.redeem(41 * ONE, alice, alice);
+    }
+
+    function test_zeroAmountClaimsRevertAfterClaimableEpochExists() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
+        vault.deposit(0, alice, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
+        vault.mint(0, alice, alice);
+
+        _claimDeposit(alice, 100 * ONE);
+        vm.prank(alice);
+        vault.requestRedeem(40 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100 * ONE, 40 * ONE);
+
+        vm.prank(alice);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
+        vault.withdraw(0, alice, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
+        vault.redeem(0, alice, alice);
+    }
+
+    function test_requestDepositRevertsWhenTokenTransferReceivesZeroAssets() public {
+        SmartAccountWrapper impl = new SmartAccountWrapper();
+        ZeroReceivedToken zeroReceivedAsset = new ZeroReceivedToken();
+        address beacon = DeployHelper.deployBeacon(address(impl), address(this));
+        SmartAccountWrapper zeroReceivedVault = DeployHelper.deploySmartAccountWrapper(
+            beacon, address(this), safe, address(zeroReceivedAsset), "Zero Received Vault", "ZRV"
+        );
+
+        zeroReceivedAsset.mint(alice, 100 * ONE);
+        vm.startPrank(alice);
+        zeroReceivedAsset.approve(address(zeroReceivedVault), 100 * ONE);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAmount.selector);
+        zeroReceivedVault.requestDeposit(100 * ONE, alice, alice);
+        vm.stopPrank();
+
+        assertEq(zeroReceivedAsset.balanceOf(zeroReceivedVault.staging()), 0, "no zero-received request is staged");
+        assertEq(zeroReceivedVault.pendingDepositRequest(1, alice), 0, "no zero-received request is queued");
     }
 
     function test_zeroRoundedClaimsCanBeSkippedAndQueueAdvances() public {
