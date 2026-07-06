@@ -223,6 +223,16 @@ contract SmartAccountWrapperTest is Test {
         assertEq(vault.smartAccount(), newSafe);
     }
 
+    function test_rescueUnrelatedTokenHeldByVaultSendsToOwner() public {
+        ERC20Mock otherToken = new ERC20Mock();
+        otherToken.mint(address(vault), 7e18);
+
+        vault.rescue(address(otherToken), 7e18);
+
+        assertEq(otherToken.balanceOf(address(this)), 7e18);
+        assertEq(otherToken.balanceOf(address(vault)), 0);
+    }
+
     function test_supportsDeclaredInterfacesOnly() public view {
         assertTrue(vault.supportsInterface(type(IERC165).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC1271).interfaceId));
