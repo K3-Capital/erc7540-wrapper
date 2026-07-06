@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LicenseRef-K3-Capital-Business-1.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
 /// @title Epoch-staged ERC-7540 vault interface

@@ -48,11 +48,11 @@ The wrapper is upgradeable through an `UpgradeableBeacon`; all beacon upgrade au
 
 This repository uses mixed licensing on a file-by-file basis:
 
-- files marked `SPDX-License-Identifier: LicenseRef-K3-Capital-Business-1.0` are K3-owned business-licensed code and require a separate written license from K3 Capital for any use, copying, modification, distribution, deployment, or other exploitation;
+- files marked `SPDX-License-Identifier: BUSL-1.1` are K3-owned code licensed under the Business Source License 1.1 terms in [`LICENSE.md`](LICENSE.md), based on the license form used by Euler Vault Kit;
 - files marked `SPDX-License-Identifier: MIT` remain under the MIT license, including lightly modified upstream-derived Solidity and deployment helper files; and
 - third-party dependencies under `lib/` remain under their own licenses.
 
-See [`LICENSE.md`](LICENSE.md) and [`NOTICE.md`](NOTICE.md) for the controlling license terms and file classification notes.
+See [`LICENSE.md`](LICENSE.md), [`LICENSE-MIT.md`](LICENSE-MIT.md), and [`NOTICE.md`](NOTICE.md) for the controlling license terms and file classification notes.
 
 ## Development
 

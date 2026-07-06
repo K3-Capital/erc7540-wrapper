@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LicenseRef-K3-Capital-Business-1.0
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
