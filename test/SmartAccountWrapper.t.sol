@@ -7,6 +7,7 @@ import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
@@ -48,6 +49,7 @@ contract SmartAccountWrapperTest is Test {
     ERC20Mock public asset;
     address safe = makeAddr("safe");
     address user = makeAddr("user");
+    address pauser = makeAddr("pauser");
 
     uint256 constant OWNER_PRIVATE_KEY = 0xA11CE;
     uint256 constant WRONG_PRIVATE_KEY = 0xB0B;
@@ -146,10 +148,63 @@ contract SmartAccountWrapperTest is Test {
 
     function test_pendingOwnerCannotActAsOwner() public {
         address newOwner = makeAddr("newOwner");
+        bytes32 pauserRole = vault.PAUSER_ROLE();
         vault.transferOwnership(newOwner);
         vm.prank(newOwner);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, newOwner));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, newOwner, pauserRole)
+        );
         vault.pause();
+    }
+
+    function test_ownerIsRoleAdminAndCanGrantPauserRole() public {
+        bytes32 pauserRole = vault.PAUSER_ROLE();
+
+        assertTrue(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), address(this)), "owner is admin");
+        assertEq(vault.getRoleAdmin(pauserRole), vault.DEFAULT_ADMIN_ROLE(), "owner-admin controls pauser role");
+
+        vault.grantRole(pauserRole, pauser);
+        assertTrue(vault.hasRole(pauserRole, pauser), "pauser role granted");
+
+        vm.prank(pauser);
+        vault.pause();
+        assertTrue(vault.paused(), "pauser can pause");
+
+        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole));
+        vm.prank(user);
+        vault.pause();
+
+        vault.revokeRole(pauserRole, pauser);
+        vault.unpause();
+
+        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole));
+        vm.prank(pauser);
+        vault.pause();
+    }
+
+    function test_pauserRoleCannotPerformOtherAdminOperations() public {
+        bytes32 pauserRole = vault.PAUSER_ROLE();
+        vault.grantRole(pauserRole, pauser);
+
+        vm.startPrank(pauser);
+
+        vault.pause();
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, pauser));
+        vault.unpause();
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, pauser));
+        vault.setSmartAccount(makeAddr("newSafe"));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE())
+        );
+        vault.grantRole(pauserRole, user);
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, pauser));
+        vault.rescue(address(asset), 0);
+
+        vm.stopPrank();
     }
 
     function test_setSmartAccount_onlyOwnerAndRejectsZeroAddress() public {
