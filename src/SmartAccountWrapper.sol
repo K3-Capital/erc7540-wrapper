@@ -60,6 +60,11 @@ contract SmartAccountWrapper is
         if (account != _msgSender()) revert SA__NotSmartAccount();
     }
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address owner_,
         address smartAccount_,
