@@ -11,7 +11,7 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
-import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
+import {IERC7575, IERC7575Share} from "forge-std/interfaces/IERC7575.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
@@ -170,14 +170,18 @@ contract SmartAccountWrapperTest is Test {
         vault.pause();
         assertTrue(vault.paused(), "pauser can pause");
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole)
+        );
         vm.prank(user);
         vault.pause();
 
         vault.revokeRole(pauserRole, pauser);
         vault.unpause();
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole)
+        );
         vm.prank(pauser);
         vault.pause();
     }
@@ -197,7 +201,9 @@ contract SmartAccountWrapperTest is Test {
         vault.setSmartAccount(makeAddr("newSafe"));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE()
+            )
         );
         vault.grantRole(pauserRole, user);
 
@@ -241,6 +247,7 @@ contract SmartAccountWrapperTest is Test {
         assertTrue(vault.supportsInterface(type(IERC7540Redeem).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7540Operator).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7575).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7575Share).interfaceId));
         assertFalse(vault.supportsInterface(0xffffffff));
     }
 

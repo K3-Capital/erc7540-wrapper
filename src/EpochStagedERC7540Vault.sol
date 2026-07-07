@@ -182,6 +182,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         return address(this);
     }
 
+    function vault(address asset_) external view returns (address) {
+        return asset_ == asset() ? address(this) : address(0);
+    }
+
     function maxDeposit(address controller) public view override returns (uint256) {
         if (_claimsPaused()) return 0;
         uint40 epochId = _oldestDepositClaimEpoch(controller);

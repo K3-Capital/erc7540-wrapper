@@ -567,7 +567,9 @@ function share() external view returns (address) {
 }
 ```
 
-`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, and ERC-7575 support.
+Because `share() == address(this)`, the wrapper is also its own ERC-7575 share token. The share side implements `vault(address asset)`, returning the wrapper for the configured underlying asset and `address(0)` for unsupported assets.
+
+`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, ERC-7575 vault, and ERC-7575 share-token support.
 
 ---
 
