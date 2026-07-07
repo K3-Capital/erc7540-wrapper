@@ -170,14 +170,18 @@ contract SmartAccountWrapperTest is Test {
         vault.pause();
         assertTrue(vault.paused(), "pauser can pause");
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole)
+        );
         vm.prank(user);
         vault.pause();
 
         vault.revokeRole(pauserRole, pauser);
         vault.unpause();
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole)
+        );
         vm.prank(pauser);
         vault.pause();
     }
@@ -197,7 +201,9 @@ contract SmartAccountWrapperTest is Test {
         vault.setSmartAccount(makeAddr("newSafe"));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE()
+            )
         );
         vault.grantRole(pauserRole, user);
 

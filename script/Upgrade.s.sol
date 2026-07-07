@@ -7,10 +7,10 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 
 contract Upgrade is Script {
     function run() public {
-        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
+        address beaconOwner = vm.envAddress("BEACON_OWNER");
         address beacon = vm.envAddress("BEACON_ADDRESS");
 
-        vm.startBroadcast(deployer);
+        vm.startBroadcast(beaconOwner);
         UpgradeableBeacon(beacon).upgradeTo(address(new SmartAccountWrapper()));
         vm.stopBroadcast();
     }

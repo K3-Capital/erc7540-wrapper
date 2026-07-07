@@ -36,28 +36,28 @@ contract DeployAll is Script {
 
 contract RequestDeposit is Script {
     function run() public {
-        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
-        address owner = vm.envAddress("OWNER");
+        address requestOwner = vm.envAddress("REQUEST_OWNER");
+        address controller = vm.envOr("REQUEST_CONTROLLER", requestOwner);
         address underlying = vm.envAddress("UNDERLYING_TOKEN");
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
         uint256 assets = vm.envUint("REQUEST_ASSETS");
 
-        vm.startBroadcast(deployer);
+        vm.startBroadcast(requestOwner);
         IERC20(underlying).approve(wrapper, assets);
-        SmartAccountWrapper(wrapper).requestDeposit(assets, owner, owner);
+        SmartAccountWrapper(wrapper).requestDeposit(assets, controller, requestOwner);
         vm.stopBroadcast();
     }
 }
 
 contract RequestRedeem is Script {
     function run() public {
-        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
-        address owner = vm.envAddress("OWNER");
+        address requestOwner = vm.envAddress("REQUEST_OWNER");
+        address controller = vm.envOr("REQUEST_CONTROLLER", requestOwner);
         address wrapper = vm.envAddress("WRAPPER_ADDRESS");
         uint256 shares = vm.envUint("REQUEST_SHARES");
 
-        vm.startBroadcast(deployer);
-        SmartAccountWrapper(wrapper).requestRedeem(shares, owner, owner);
+        vm.startBroadcast(requestOwner);
+        SmartAccountWrapper(wrapper).requestRedeem(shares, controller, requestOwner);
         vm.stopBroadcast();
     }
 }

@@ -44,7 +44,7 @@ else
     exit 1
 fi
 
-REQUIRED_VARS="RPC_URL DEPLOYER_ADDRESS BEACON_ADDRESS OWNER"
+REQUIRED_VARS="RPC_URL BEACON_OWNER BEACON_ADDRESS"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo "Error: $var not set in .env"
@@ -57,15 +57,15 @@ if [ "$BROADCAST" -eq 1 ]; then
     MODE="BROADCAST"
 fi
 
-if [ "$BROADCAST" -eq 1 ] && [ -z "${CAST_WALLET_ACCOUNT:-}" ] && [ "${ANVIL_UNLOCKED:-}" != "1" ] && [ "${ANVIL_UNLOCKED:-}" != "true" ]; then
-    echo "Error: broadcast mode requires CAST_WALLET_ACCOUNT or ANVIL_UNLOCKED=true"
-    echo "Use 'cast wallet import <name> --interactive' and set CAST_WALLET_ACCOUNT=<name>."
+if [ "$BROADCAST" -eq 1 ] && [ -z "${BEACON_OWNER_WALLET_ACCOUNT:-}" ] && [ "${ANVIL_UNLOCKED:-}" != "1" ] && [ "${ANVIL_UNLOCKED:-}" != "true" ]; then
+    echo "Error: broadcast mode requires BEACON_OWNER_WALLET_ACCOUNT or ANVIL_UNLOCKED=true"
+    echo "Use 'cast wallet import <name> --interactive' and set BEACON_OWNER_WALLET_ACCOUNT=<name>."
     exit 1
 fi
 
-SIGNER_ARGS=(--sender "$DEPLOYER_ADDRESS")
-if [ -n "${CAST_WALLET_ACCOUNT:-}" ]; then
-    SIGNER_ARGS+=(--account "$CAST_WALLET_ACCOUNT")
+SIGNER_ARGS=(--sender "$BEACON_OWNER")
+if [ -n "${BEACON_OWNER_WALLET_ACCOUNT:-}" ]; then
+    SIGNER_ARGS+=(--account "$BEACON_OWNER_WALLET_ACCOUNT")
 elif [ "${ANVIL_UNLOCKED:-}" = "1" ] || [ "${ANVIL_UNLOCKED:-}" = "true" ]; then
     SIGNER_ARGS+=(--unlocked)
 fi
@@ -78,10 +78,9 @@ echo "RPC URL:  $RPC_URL"
 if [ -n "${NETWORK:-}" ]; then
     echo "Verify network: $NETWORK"
 fi
-echo "Deployer: $DEPLOYER_ADDRESS"
-echo "Signer:  ${CAST_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
+echo "Beacon owner: $BEACON_OWNER"
+echo "Signer:  ${BEACON_OWNER_WALLET_ACCOUNT:-${ANVIL_UNLOCKED:+unlocked}}"
 echo "Beacon:  $BEACON_ADDRESS"
-echo "Owner:   $OWNER"
 if [ -n "${WRAPPER_ADDRESS:-}" ]; then
     echo "Wrapper: $WRAPPER_ADDRESS"
 fi
