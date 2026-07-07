@@ -257,6 +257,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (controller == address(0) || owner == address(0)) revert SA__ZeroAddress();
         address caller = _msgSender();
         if (caller != owner && !isOperator(owner, caller)) revert SA__NotAuthorized();
+        if (controller != owner && (controller == caller || !isOperator(controller, caller))) {
+            revert SA__NotAuthorized();
+        }
 
         EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.currentEpochId;

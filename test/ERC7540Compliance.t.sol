@@ -78,6 +78,49 @@ contract ERC7540ComplianceTest is Test {
         assertEq(vault.balanceOf(operator), 100e18);
     }
 
+    function test_operatorCannotRedirectOwnerFundedDepositToOwnController() public {
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.setOperator(operator, true);
+        vm.stopPrank();
+
+        vm.prank(operator);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestDeposit(100e18, operator, user);
+
+        assertEq(vault.pendingDepositRequest(1, operator), 0);
+        assertEq(asset.balanceOf(user), 1_000_000e18);
+    }
+
+    function test_unrelatedCallerCannotSelfFundVictimControllerRequest() public {
+        asset.mint(operator, 100e18);
+
+        vm.startPrank(operator);
+        asset.approve(address(vault), 100e18);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestDeposit(100e18, user, operator);
+        vm.stopPrank();
+
+        assertEq(vault.pendingDepositRequest(1, user), 0);
+        assertEq(asset.balanceOf(operator), 100e18);
+    }
+
+    function test_controllerAuthorizedCallerCanSelfFundControllerRequest() public {
+        asset.mint(operator, 100e18);
+
+        vm.prank(user);
+        vault.setOperator(operator, true);
+
+        vm.startPrank(operator);
+        asset.approve(address(vault), 100e18);
+        uint256 requestId = vault.requestDeposit(100e18, user, operator);
+        vm.stopPrank();
+
+        assertEq(requestId, 1);
+        assertEq(vault.pendingDepositRequest(requestId, user), 100e18);
+        assertEq(asset.balanceOf(operator), 0);
+    }
+
     function test_previewFunctionsRevert() public {
         vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewDeposit(1);
