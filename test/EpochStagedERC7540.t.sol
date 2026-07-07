@@ -134,6 +134,8 @@ contract EpochStagedERC7540Test is Test {
         vault.deposit(25 * ONE, alice, alice);
 
         vm.prank(alice);
+        vault.setOperator(bob, false);
+        vm.prank(alice);
         vault.approve(bob, 10 * ONE);
         vm.prank(bob);
         uint256 redeemRequestId = vault.requestRedeem(10 * ONE, alice, alice);
@@ -141,6 +143,46 @@ contract EpochStagedERC7540Test is Test {
         assertEq(redeemRequestId, 2, "spender redeem uses current epoch");
         assertEq(vault.pendingRedeemRequest(2, alice), 10 * ONE, "redeem credited to controller");
         assertEq(vault.allowance(alice, bob), 0, "spender allowance consumed");
+    }
+
+    function test_operatorCanRequestRedeemForControllerWithoutShareAllowance() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        vault.deposit(100 * ONE, alice, alice);
+        vm.prank(alice);
+        vault.setOperator(bob, true);
+
+        vm.prank(bob);
+        uint256 redeemRequestId = vault.requestRedeem(10 * ONE, alice, alice);
+
+        assertEq(redeemRequestId, 2, "operator redeem uses current epoch");
+        assertEq(vault.pendingRedeemRequest(2, alice), 10 * ONE, "redeem credited to controller");
+        assertEq(vault.balanceOf(alice), 90 * ONE, "shares moved from owner");
+        assertEq(vault.balanceOf(vault.staging()), 10 * ONE, "shares staged");
+        assertEq(vault.allowance(alice, bob), 0, "operator path does not need allowance");
+    }
+
+    function test_operatorCannotRequestRedeemToDifferentControllerWithoutShareAllowance() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.prank(alice);
+        vault.deposit(100 * ONE, alice, alice);
+        vm.prank(alice);
+        vault.setOperator(bob, true);
+
+        vm.prank(bob);
+        vm.expectRevert();
+        vault.requestRedeem(10 * ONE, bob, alice);
+
+        assertEq(vault.pendingRedeemRequest(2, bob), 0, "no redirected redeem request");
+        assertEq(vault.balanceOf(alice), 100 * ONE, "owner shares stay with owner");
     }
 
     function test_sameEpochRepeatedRequestsDoNotDuplicateQueueEntries() public {
