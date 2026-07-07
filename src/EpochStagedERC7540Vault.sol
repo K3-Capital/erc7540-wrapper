@@ -41,6 +41,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         uint256 totalRedeemShares;
         uint256 depositSharesMinted;
         uint256 redeemAssetsReserved;
+        uint256 depositAssetsClaimed;
+        uint256 depositSharesClaimed;
+        uint256 redeemSharesClaimed;
+        uint256 redeemAssetsClaimed;
     }
 
     /// @custom:storage-location erc7201:zyfai.storage.EpochStagedERC7540Vault
@@ -382,7 +386,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
             totalDepositAssets: epoch.totalDepositAssets,
             totalRedeemShares: epoch.totalRedeemShares,
             depositSharesMinted: depositShares,
-            redeemAssetsReserved: redeemAssets
+            redeemAssetsReserved: redeemAssets,
+            depositAssetsClaimed: 0,
+            depositSharesClaimed: 0,
+            redeemSharesClaimed: 0,
+            redeemAssetsClaimed: 0
         });
 
         $.activeAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
@@ -505,6 +513,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (assets == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
+        SettlementData storage settlement = $.settlements[epochId];
+        settlement.depositAssetsClaimed += assets;
+        settlement.depositSharesClaimed += shares;
         if (shares > 0) _transfer(staging(), receiver, shares);
         if (
             claim.assetsClaimed == $.epochs[epochId].depositAssets[controller]
@@ -588,6 +599,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (shares == 0) revert SA__ZeroAmount();
         claim.assetsClaimed += assets;
         claim.sharesClaimed += shares;
+        SettlementData storage settlement = $.settlements[epochId];
+        settlement.redeemSharesClaimed += shares;
+        settlement.redeemAssetsClaimed += assets;
         $.totalRedeemClaimReserves -= assets;
         if (assets > 0) $.staging.transferToken(asset(), receiver, assets);
         if (
@@ -608,6 +622,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         SettlementData storage settlement = $.settlements[epochId];
         DepositClaimData storage claim = $.depositClaims[epochId][controller];
         uint256 assets = epoch.depositAssets[controller];
+        uint256 remainingAssets = assets - claim.assetsClaimed;
+        if (remainingAssets == settlement.totalDepositAssets - settlement.depositAssetsClaimed) {
+            return settlement.depositSharesMinted - settlement.depositSharesClaimed;
+        }
         uint256 totalShares = epoch.totalDepositAssets == 0
             ? 0
             : assets.mulDiv(settlement.depositSharesMinted, epoch.totalDepositAssets, Math.Rounding.Floor);
@@ -623,6 +641,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         SettlementData storage settlement = $.settlements[epochId];
         RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
         uint256 shares = epoch.redeemShares[controller];
+        uint256 remainingShares = shares - claim.sharesClaimed;
+        if (remainingShares == settlement.totalRedeemShares - settlement.redeemSharesClaimed) {
+            return settlement.redeemAssetsReserved - settlement.redeemAssetsClaimed;
+        }
         uint256 totalClaimAssets = epoch.totalRedeemShares == 0
             ? 0
             : shares.mulDiv(settlement.redeemAssetsReserved, epoch.totalRedeemShares, Math.Rounding.Floor);
