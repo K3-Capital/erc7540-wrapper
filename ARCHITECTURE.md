@@ -1,7 +1,7 @@
 # Epoch-Based ERC-7540 Wrapper — Architecture Specification
 
 > **Audience**: security auditors, integrators, Safe operators, and implementers.
-> This document specifies the target architecture for an ERC-7540-compatible vault wrapper around a manually managed Gnosis Safe. It describes the desired epoch/staging design, not the current implementation line-by-line.
+> This document describes the current as-built architecture for the ERC-7540-compatible vault wrapper around a manually managed Gnosis Safe. It is intended to stay aligned with the contracts in `src/`, especially `SmartAccountWrapper`, `EpochStagedERC7540Vault`, and `Staging`.
 
 ---
 
@@ -145,17 +145,19 @@ The vault separates active assets from staged requests.
 
 ### Active assets
 
-`totalAssets()` should represent the last settled active NAV of the vault after all prior settled epochs have been incorporated. It should **exclude** staged deposit assets, redeem assets sent temporarily for settlement, and other temporary settlement buffers.
+`totalAssets()` returns the vault's internally tracked `activeAssets`: the last settled active NAV after the latest settled epoch has been incorporated. It excludes staged deposit assets, redeem claim reserves, and other temporary settlement buffers.
 
-This means the implementation must keep separate accounting buckets for assets that can sit in the wrapper/Staging system at the same time:
+The implementation keeps those balances separated through accounting plus custody location:
 
-- open-epoch staged deposit assets,
-- the single frozen epoch's staged deposit assets,
-- assets pre-transferred by the Safe for the frozen epoch settlement,
-- redeem claim reserves from already settled epochs,
-- true surplus assets that can be moved to the Safe.
+- open-epoch and frozen-epoch staged deposit assets are held by `Staging` and accounted in `epochs[epochId].depositAssets` / `totalDepositAssets`,
+- staged redeem shares are held by `Staging` and accounted in `epochs[epochId].redeemShares` / `totalRedeemShares`,
+- redeem claim reserves from settled epochs are held by `Staging` as underlying assets and tracked globally by `totalRedeemClaimReserves`,
+- temporary settlement funding supplied by the Safe is observed in the wrapper's underlying balance during `settleEpoch`,
+- any wrapper underlying balance remaining after redeem reserves are moved back to `Staging` is treated as surplus and transferred to the Safe at the end of settlement.
 
-The settlement logic must never treat the raw ERC-20 balance of the wrapper or Staging contract as a single fungible pool. In particular, deposits submitted to the newly opened epoch after `closeEpoch()` must not be used to fund redemption claims for the frozen epoch being settled.
+The surplus transferred to the Safe is **wrapper surplus**, not an identified surplus bucket inside `Staging`. `Staging` holds fungible tokens in one address, so the vault does not know which physical token units correspond to which epoch. Instead, the vault relies on its per-epoch accounting and on `Staging`'s `onlyVault` transfer restriction: settlement moves exactly the frozen epoch's recorded deposit amount out of `Staging`, leaves all other staged/request-reserve accounting untouched, moves the computed redeem reserve back to `Staging`, and then treats only the wrapper's remaining balance as Safe surplus.
+
+The settlement logic does not price or settle from raw balances alone: it settles only `frozenEpochId`, uses that epoch's recorded totals, and leaves assets staged for the newly opened epoch in `Staging`.
 
 ### Staged deposit assets
 
@@ -163,23 +165,22 @@ Deposit requests transfer underlying assets into staging and record assets per c
 
 ### Staged redeem shares
 
-Redeem requests transfer/lock vault shares into staging and record shares per controller for the epoch. Preferred design: keep these shares outstanding until settlement, then burn them during settlement. This keeps `totalSupply()` aligned with the settlement NAV snapshot.
+Redeem requests transfer vault shares into `Staging` and record shares per controller for the epoch. These shares remain outstanding until settlement, then the frozen epoch's staged shares are burned. This keeps `totalSupply()` aligned with the settlement NAV snapshot.
 
 Like staged assets, staged shares must be accounted per epoch. Settlement burns only the frozen epoch's redeem shares and must not touch shares staged for the currently open epoch.
 
 ### Settlement snapshots
 
-Each settled epoch records the price basis used by claim functions:
+Each settled epoch records the price basis used by claim functions. In the current implementation, settlement state stores the numeric settlement data while settled/closed status lives in `EpochData`:
 
 ```solidity
 struct SettlementData {
-    uint256 navSnapshot;          // active Safe NAV before processing this epoch
-    uint256 totalSupplySnapshot;  // share supply used for this epoch's price
-    uint256 totalDepositAssets;   // frozen deposit assets in this epoch
-    uint256 totalRedeemShares;    // frozen redeem shares in this epoch
-    uint256 depositSharesMinted;  // shares made claimable for depositors
-    uint256 redeemAssetsReserved; // assets reserved for redeemers
-    bool settled;
+    uint256 navSnapshot;
+    uint256 totalSupplySnapshot;
+    uint256 totalDepositAssets;
+    uint256 totalRedeemShares;
+    uint256 depositSharesMinted;
+    uint256 redeemAssetsReserved;
 }
 ```
 
@@ -199,7 +200,8 @@ The vault uses **one epoch ID** for both deposits and redemptions. Each epoch ha
 
 ```solidity
 struct EpochData {
-    EpochStatus status; // Open, Closed, Settled
+    bool closed;
+    bool settled;
     uint256 totalDepositAssets;
     uint256 totalRedeemShares;
     mapping(address controller => uint256 assets) depositAssets;
@@ -242,7 +244,7 @@ event EpochClosed(
 
 ### Settled epoch
 
-`settleEpoch(epochId, navSnapshot)` records settlement pricing, reserves claim assets, transfers surplus staged deposit assets to the Safe, burns staged redeem shares, mints or reserves deposit claim shares, updates active accounting, and makes requests claimable.
+`settleEpoch(epochId, navSnapshot)` records settlement pricing, moves frozen deposit assets from `Staging` to the wrapper, reserves redeem assets back in `Staging`, burns staged redeem shares, mints deposit claim shares to `Staging`, updates active accounting, transfers wrapper surplus to the Safe, and makes requests claimable.
 
 Settlement clears the frozen-epoch lock, allowing the Safe to call `closeEpoch()` again for the currently open epoch.
 
@@ -279,8 +281,9 @@ sequenceDiagram
 
     Note over Vault: later: closeEpoch() freezes totals
     Safe->>Vault: settleEpoch(epochId, navSnapshot)
-    Vault->>Safe: transfer staged deposit assets to Safe
-    Vault->>Vault: make deposit shares claimable
+    Vault->>Vault: move frozen staged assets through wrapper
+    Vault->>Safe: transfer wrapper surplus to Safe
+    Vault->>Vault: mint claimable shares to Staging
 
     User->>Vault: deposit(assets, receiver, controller)
     Vault->>Vault: consume claimable deposit assets
@@ -310,8 +313,8 @@ sequenceDiagram
     participant Safe as Gnosis Safe
 
     User->>Vault: requestRedeem(shares, controller, owner)
-    Vault->>Vault: verify owner share authorization
-    Vault->>Stage: transfer/lock shares from owner to Stage
+    Vault->>Vault: verify owner/operator/allowance share authorization
+    Vault->>Stage: transfer shares from owner to Stage
     Vault->>Vault: epoch.redeemShares[controller] += shares
     Vault-->>User: requestId = currentEpochId
 
@@ -331,7 +334,7 @@ sequenceDiagram
 - `requestRedeem` transfers or locks shares into staging and emits `RedeemRequest`.
 - `requestRedeem` does **not** compute assets at request time.
 - `requestRedeem` returns the active `currentEpochId` as `requestId`.
-- Preferred design: shares are transferred to staging at request time and burned at settlement.
+- Shares are transferred to `Staging` at request time and burned at settlement.
 - A controller may have unclaimed claimable redeem requests from multiple settled epochs. Claim state is tracked per epoch so a new request does not require claiming an older epoch first.
 - `redeem` and `withdraw` are claim functions after settlement and must not transfer or burn shares a second time.
 
@@ -382,14 +385,12 @@ newTotalSupply = S + depositShares - R
 
 ### Initial issuance and zero-NAV cases
 
-The formula above assumes both `A > 0` and `S > 0`. The implementation must define explicit bootstrap behavior:
+The formula above assumes both `A > 0` and `S > 0`. The implementation defines explicit bootstrap and invalid-NAV branches:
 
-- If `S == 0`, the first settled deposit epoch should use a fixed initial exchange rate, such as `depositShares = D` adjusted for asset/share decimals.
-- If `S == 0`, there should be no redeem shares in the epoch.
-- If `S > 0` and `A == 0`, deposit settlement cannot use `D * S / A`; either revert deposits for that epoch or require an explicit emergency/recapitalization path.
-- If `A == 0`, redeem assets due are zero, but the implementation should still make this an explicit audited branch rather than relying on division behavior.
-
-The v1 implementation should document and test the bootstrap path separately from normal profitable/loss-making epochs.
+- If `S == 0`, `navSnapshot` must also be zero. The first settled deposit epoch mints shares at a 1:1 asset/share rate: `depositShares = D`.
+- If `S == 0`, the epoch must not contain redeem shares; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
+- If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
+- If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
 
 Rounding rules should be conservative:
 
@@ -401,12 +402,12 @@ Rounding residuals stay with remaining shareholders in v1. Settlement and claim 
 
 ### NAV sanity checks
 
-Because NAV is manually reported by the Safe, settlement should include operational guardrails even though the Safe is trusted:
+Because NAV is manually reported by the Safe, settlement includes the following guardrails even though the Safe is trusted:
 
 - `navSnapshot` is post-fee and pre-settlement.
 - `navSnapshot` must be nonzero when normal settlement math requires division by NAV.
-- Optional but recommended: configurable maximum NAV movement per epoch, or at least an event/alert path for abnormal NAV jumps.
-- Emergency override paths, if any, should emit distinct events and should not be confused with normal `settleEpoch`.
+- The current implementation does not include a configurable maximum NAV movement check. Abnormal NAV jump monitoring is an off-chain operational concern for v1.
+- Emergency override paths, if added through a future upgrade, should emit distinct events and should not be confused with normal `settleEpoch`.
 
 ### Emergency settlement as upgrade-only last resort
 
@@ -424,11 +425,18 @@ Any upgrade-based emergency settlement should be treated as a governance/admin e
 
 ### Safe asset movement
 
-Settlement supports **netting** between staged deposit assets and redeem assets due. The Safe still pre-transfers any additional underlying assets needed for redeem claims before calling `settleEpoch`, and the backoffice system batches that transfer with the settlement call.
+Settlement supports **netting** between frozen staged deposit assets and redeem assets due. The Safe pre-transfers any additional underlying assets needed for redeem claims before calling `settleEpoch`, and the backoffice system batches that transfer with the settlement call.
 
-The implementation should not require a full gross round trip when staged deposit assets can fund some or all redeem claims. Instead, settlement computes the epoch's `redeemAssets`, observes the underlying assets available in the wrapper/Staging system, reserves enough for redeem claims, and transfers only surplus staged deposit assets to the Safe.
+The implemented custody path is:
 
-Only the frozen epoch's staged deposit assets may be netted against that same frozen epoch's redeem assets due. Assets staged for the newly opened epoch after `closeEpoch()` are not available for the frozen epoch settlement.
+1. transfer the frozen epoch's full staged deposit assets from `Staging` to the wrapper,
+2. require the wrapper's underlying balance to be at least `redeemAssets`, including any Safe pre-transfer,
+3. transfer `redeemAssets` from the wrapper back to `Staging` as redeem claim reserves,
+4. burn frozen staged redeem shares from `Staging`,
+5. mint deposit claim shares to `Staging`,
+6. transfer all remaining wrapper underlying balance to the Safe as surplus.
+
+Only the frozen epoch's staged deposit assets are moved during settlement. Assets staged for the newly opened epoch after `closeEpoch()` remain in `Staging` and are not available for the frozen epoch settlement.
 
 Example:
 
@@ -463,9 +471,9 @@ post-settlement claim reserve >= redeemAssetsReserved for the epoch
 
 - `epochId == frozenEpochId`, enforcing that only the single closed-but-unsettled epoch can be settled.
 - Epoch is closed and not already settled.
-- After netting and any Safe pre-transfer, the wrapper/Staging system has at least `redeemAssets` underlying reserved for claims.
-- Staging holds at least the frozen deposit assets and redeem shares.
-- Assets staged for any open epoch are excluded from the frozen epoch's settlement reserve calculation.
+- After moving frozen deposits and observing any Safe pre-transfer, the wrapper has at least `redeemAssets` before reserves are sent to `Staging`.
+- Staging holds at least the frozen deposit assets and redeem shares before settlement.
+- Assets staged for any open epoch remain in `Staging` and are excluded from the frozen epoch's settlement movement.
 - The provided `navSnapshot` is nonzero when total supply is nonzero.
 
 If the wrapper/Staging system does not have enough assets for the frozen redeem bucket after netting and Safe pre-transfer, settlement should revert rather than partially settle.
@@ -478,11 +486,11 @@ ERC-7540 requires users to pull outputs through ERC-4626 claim functions. The va
 
 ### Deposit claim
 
-Because multiple settled epochs can remain unclaimed for the same controller, claim accounting is tracked by `(epochId, controller)` internally. ERC-4626 claim functions do not include a request ID, so implementation must define a deterministic claim-selection policy. V1 uses the simplest policy: each claim consumes only the controller's oldest claimable epoch for that side. If a controller has claimable balances in later epochs, they must submit additional claim calls after the oldest epoch is fully claimed.
+Because multiple settled epochs can remain unclaimed for the same controller, claim accounting is tracked by `(epochId, controller)` internally. ERC-4626 claim functions do not include a request ID, so the implementation uses a deterministic claim-selection policy: each claim consumes only the controller's oldest claimable epoch for that side. If a controller has claimable balances in later epochs, they must submit additional claim calls after the oldest epoch is fully claimed.
 
-For each settled epoch/controller, the implementation should track both sides of the settled conversion: deposit `assetsClaimable` and `sharesClaimable`, and redeem `sharesClaimable` and `assetsClaimable`. This avoids recalculating with a different rounding mode during claims and lets `deposit`/`mint` and `redeem`/`withdraw` consume the same settlement allocation consistently.
+For each settled epoch/controller, the implementation stores claimed counters only: deposit `assetsClaimed` / `sharesClaimed` and redeem `sharesClaimed` / `assetsClaimed`. Remaining claimable shares/assets are derived from the original epoch request totals and settlement totals using the same rounding direction as the claim function.
 
-`maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` should expose only the currently oldest claimable epoch for the controller. They should not aggregate across multiple claimable epochs because one claim call does not span epochs in v1.
+`maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` expose only the currently oldest claimable epoch for the controller. They do not aggregate across multiple claimable epochs because one claim call does not span epochs in v1. When claims are paused, these `max*` functions return zero.
 
 `deposit(assets, receiver, controller)`:
 
@@ -509,7 +517,7 @@ For each settled epoch/controller, the implementation should track both sides of
 
 ## 10. ERC-7540 / ERC-4626 API Compatibility
 
-The target design is **fully asynchronous**: async deposits and async redemptions.
+The current design is **fully asynchronous**: async deposits and async redemptions.
 
 There is no synchronous deposit, mint, withdraw, or redeem path in v1. The inherited ERC-4626 methods are claim functions only, as required for the async sides of ERC-7540.
 
@@ -517,7 +525,7 @@ There is no synchronous deposit, mint, withdraw, or redeem path in v1. The inher
 
 The active epoch ID is the ERC-7540 `requestId`. Multiple requests from the same controller in the same epoch aggregate under the same `(requestId, controller)` pair. Requests sharing a nonzero epoch ID are fungible: they freeze together, settle together, and receive the same exchange rate.
 
-| Function | Target behavior |
+| Function | Current behavior |
 |---|---|
 | `requestDeposit(uint256 assets, address controller, address owner)` | Transfer assets from owner to staging; record pending deposit assets in current epoch; return `currentEpochId`; emit `DepositRequest`. |
 | `pendingDepositRequest(uint256 requestId, address controller)` | Return assets for open/closed but unsettled epoch; exclude claimable settled amounts; caller-independent. |
@@ -532,7 +540,7 @@ The active epoch ID is the ERC-7540 `requestId`. Multiple requests from the same
 
 Because both sides are async:
 
-| ERC-4626 function | Target behavior |
+| ERC-4626 function | Current behavior |
 |---|---|
 | `deposit(uint256 assets, address receiver)` | Claim caller/controller's settled deposit request. Does not transfer assets. |
 | `deposit(uint256 assets, address receiver, address controller)` | ERC-7540 controller-aware deposit claim. |
@@ -578,8 +586,10 @@ Operators are approved per controller.
 `requestRedeem(shares, controller, owner)`:
 
 - authorization is about taking/locking `owner`'s vault shares,
-- if `msg.sender != owner`, approval may come from ERC-20 share allowance or operator approval from `owner`,
-- this should not be conflated with controller claim authorization.
+- if `msg.sender == owner`, no additional share authorization is needed,
+- if `msg.sender != owner` and `controller == owner` and `owner` approved `msg.sender` as an ERC-7540 operator, the request is allowed without consuming ERC-20 share allowance,
+- otherwise the call must spend ERC-20 share allowance from `owner` to `msg.sender`,
+- this request-time share authorization is separate from controller claim authorization. The operator no-allowance path is intentionally limited to `controller == owner` so an operator cannot redirect the owner's shares into an unrelated controller bucket.
 
 ### Claim authorization
 
@@ -587,6 +597,8 @@ Operators are approved per controller.
 
 - `controller == msg.sender`, or
 - `controller` approved `msg.sender` as an operator.
+
+Claims can send output to an arbitrary `receiver`, but only the controller or its approved operator can consume the controller's claimable request.
 
 ---
 
@@ -606,10 +618,13 @@ Operators are approved per controller.
 
 ### Settlement time
 
-- Safe provides redeem assets due for the closed epoch.
-- Staged deposit assets are moved to the Safe.
-- Staged redeem shares are burned.
+- Safe pre-transfers any redeem-asset shortfall to the wrapper before calling `settleEpoch`.
+- Frozen staged deposit assets move from `Staging` to the wrapper.
+- Redeem claim reserves move from the wrapper to `Staging`.
+- Staged redeem shares are burned from `Staging`.
+- Deposit claim shares are minted to `Staging`.
 - Vault accounting updates to the post-settlement active assets and supply.
+- Remaining wrapper underlying surplus is transferred to the Safe.
 - Claims become available.
 
 ### Claim time
@@ -626,7 +641,9 @@ Operators are approved per controller.
 - Staging should not expose arbitrary external transfer functions,
 - Staging should support per-epoch accounting or wrapper-enforced per-epoch accounting so frozen-epoch assets/shares cannot be confused with open-epoch assets/shares,
 - Staging should not call the Safe or perform NAV-sensitive logic,
-- any rescue function must be admin-only, evented, and unable to drain user-accounted staged or claim-reserved balances during normal operation.
+- `SmartAccountWrapper.rescueStagedToken` is owner-only and rejects the underlying asset and wrapper share token, so it cannot drain normal staged request assets/shares from `Staging`,
+- `SmartAccountWrapper.rescue(asset, amount)` is owner-only and sends underlying surplus from the wrapper to the Safe. Redeem claim reserves live in `Staging` after settlement, but pre-settlement funding temporarily held by the wrapper is still admin-trusted during the settlement window,
+- rescue functions do not emit dedicated rescue events in the current implementation beyond token transfer events.
 
 ---
 
@@ -667,17 +684,14 @@ Operators are approved per controller.
 
 ## 15. Contract Reference
 
-### Target state variables
+### Current state variables
+
+The implementation uses ERC-7201 namespaced storage in `EpochStagedERC7540Vault` rather than standalone public state variables. The current core storage shape is:
 
 ```solidity
-enum EpochStatus {
-    Open,
-    Closed,
-    Settled
-}
-
 struct EpochData {
-    EpochStatus status;
+    bool closed;
+    bool settled;
     uint256 totalDepositAssets;
     uint256 totalRedeemShares;
     mapping(address controller => uint256 assets) depositAssets;
@@ -691,40 +705,49 @@ struct SettlementData {
     uint256 totalRedeemShares;
     uint256 depositSharesMinted;
     uint256 redeemAssetsReserved;
-    uint256 redeemAssetsClaimed;
-    bool settled;
 }
 
 struct DepositClaimData {
-    uint256 assetsClaimable;
-    uint256 sharesClaimable;
     uint256 assetsClaimed;
     uint256 sharesClaimed;
 }
 
 struct RedeemClaimData {
-    uint256 sharesClaimable;
-    uint256 assetsClaimable;
     uint256 sharesClaimed;
     uint256 assetsClaimed;
 }
 
-uint40 currentEpochId;
-uint40 frozenEpochId; // 0 when no epoch is closed-but-unsettled
-mapping(uint40 epochId => EpochData) epochs;
-mapping(uint40 epochId => SettlementData) settlements;
-mapping(uint40 epochId => mapping(address controller => DepositClaimData)) depositClaims;
-mapping(uint40 epochId => mapping(address controller => RedeemClaimData)) redeemClaims;
-mapping(address controller => uint40 epochId) lastDepositRequestId;
-mapping(address controller => uint40 epochId) lastRedeemRequestId;
-mapping(address controller => uint40 epochId) nextDepositClaimEpoch;
-mapping(address controller => uint40 epochId) nextRedeemClaimEpoch;
-uint256 totalRedeemClaimReserves;
+struct EpochStagedERC7540VaultStorage {
+    uint40 currentEpochId;
+    uint40 frozenEpochId;
+    Staging staging;
+    uint256 activeAssets;
+    uint256 totalRedeemClaimReserves;
+    mapping(uint40 epochId => EpochData) epochs;
+    mapping(uint40 epochId => SettlementData) settlements;
+    mapping(uint40 epochId => mapping(address controller => DepositClaimData)) depositClaims;
+    mapping(uint40 epochId => mapping(address controller => RedeemClaimData)) redeemClaims;
+    mapping(address controller => mapping(address operator => bool)) operators;
+    mapping(address controller => uint40 epochId) firstDepositEpoch;
+    mapping(address controller => uint40 epochId) lastDepositEpoch;
+    mapping(address controller => mapping(uint40 epochId => uint40 nextEpochId)) nextDepositEpoch;
+    mapping(address controller => uint40 epochId) firstRedeemEpoch;
+    mapping(address controller => uint40 epochId) lastRedeemEpoch;
+    mapping(address controller => mapping(uint40 epochId => uint40 nextEpochId)) nextRedeemEpoch;
+}
 ```
 
-### Target events
+Claimable amounts are derived from epoch request totals, settlement totals, and claimed counters. The implementation does not store separate `assetsClaimable` / `sharesClaimable` fields per controller.
+
+`SmartAccountWrapper` adds its own ERC-7201 storage namespace for the current strategy Safe / smart account address.
+
+### Current events
 
 ```solidity
+event DepositRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets);
+event RedeemRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares);
+event OperatorSet(address indexed controller, address indexed operator, bool approved);
+
 event EpochClosed(
     uint40 indexed epochId,
     uint40 indexed nextEpochId,
@@ -741,24 +764,23 @@ event EpochSettled(
     uint256 depositSharesMinted,
     uint256 redeemAssetsReserved
 );
+
+event SmartAccountSet(address smartAccount);
 ```
 
-ERC-7540 events are also required:
-
-```solidity
-event DepositRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 assets);
-event RedeemRequest(address indexed controller, address indexed owner, uint256 indexed requestId, address sender, uint256 shares);
-event OperatorSet(address indexed controller, address indexed operator, bool approved);
-```
-
-### Target admin / ops functions
+### Current admin / ops functions
 
 ```solidity
 function closeEpoch() external returns (uint40 closedEpochId, uint40 nextEpochId);
 function settleEpoch(uint40 epochId, uint256 navSnapshot) external;
+function setSmartAccount(address smartAccount_) external;
+function pause() external;
+function unpause() external;
+function rescue(address token, uint256 amount) external;
+function rescueStagedToken(address token, uint256 amount) external;
 ```
 
-Both functions are restricted to the Strategy Safe in v1. Ops controls the Safe and batches any required underlying transfer with `settleEpoch`.
+`closeEpoch` and `settleEpoch` are restricted to the configured Strategy Safe / smart account. `setSmartAccount`, `unpause`, and both rescue functions are owner-only. `pause` is callable by owner or `PAUSER_ROLE`.
 
 ---
 
@@ -778,3 +800,4 @@ Both functions are restricted to the Strategy Safe in v1. Ops controls the Safe 
 10. **No synchronous escape hatch**: sync deposit/mint/withdraw/redeem are disabled as entry/exit paths in v1; those ERC-4626 methods are claim functions only.
 11. **Rounding and dust**: rounding residuals stay with remaining shareholders.
 12. **Emergency settlement**: no normal callable emergency settlement function in v1. If a frozen epoch must be force-settled, the absolute last resort hatch is a vault proxy implementation upgrade with distinct emergency events and explicit impairment/recovery disclosure.
+13. **Pause behavior**: `requestDeposit` and `requestRedeem` are paused by `SmartAccountWrapper`; claim functions remain callable, while `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` return zero when paused.
