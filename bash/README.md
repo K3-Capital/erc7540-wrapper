@@ -27,7 +27,9 @@ Required deployment variables:
 | Variable | Description |
 | --- | --- |
 | `CAST_WALLET_ACCOUNT` | Foundry/cast encrypted wallet account name, e.g. `deployer`. |
-| `DEPLOYER_ADDRESS` | Public address of the deployer/upgrader account. |
+| `DEPLOYER_ADDRESS` | Public address of the deployer account. |
+| `BEACON_OWNER_WALLET_ACCOUNT` | Foundry/cast encrypted wallet account that owns the beacon and signs upgrades. |
+| `BEACON_OWNER` | Public address of the beacon owner/admin. |
 | `DEPLOY_SALT` | bytes32 CREATE3 salt for implementation/beacon/wrapper addresses. |
 | `OWNER` | Owner/admin for the beacon and wrapper. Usually a Safe. |
 | `SMART_ACCOUNT` | Smart account/Safe authorized to close and settle epochs. |
@@ -52,7 +54,7 @@ Create the deployer account in Foundry's encrypted keystore instead of writing a
 cast wallet import deployer --interactive
 ```
 
-Set `CAST_WALLET_ACCOUNT=deployer` and `DEPLOYER_ADDRESS=0x...` in `.env`. Foundry will prompt for the keystore password when `--broadcast` is used. For local Anvil-only testing, set `ANVIL_UNLOCKED=true` and `DEPLOYER_ADDRESS` to one of Anvil's unlocked accounts instead of using a cast wallet account.
+Set `CAST_WALLET_ACCOUNT=deployer` and `DEPLOYER_ADDRESS=0x...` in `.env`. For upgrades, also set `BEACON_OWNER_WALLET_ACCOUNT=beacon-owner` and `BEACON_OWNER=0x...` for the beacon owner/admin. Foundry will prompt for the keystore password when `--broadcast` is used. For local Anvil-only testing, set `ANVIL_UNLOCKED=true` and the relevant sender address to one of Anvil's unlocked accounts instead of using a cast wallet account.
 
 ## Preview deployment addresses
 
@@ -113,10 +115,23 @@ Broadcast only after reviewing the target beacon and signer:
 
 The upgrade script deploys a fresh `SmartAccountWrapper` implementation and calls `UpgradeableBeacon.upgradeTo(newImplementation)`. It does **not** reinitialize existing proxies.
 
+## Request deposits and redeems
+
+The Foundry request helpers broadcast as the asset/share owner rather than the deployer:
+
+```bash
+export REQUEST_OWNER=0x...
+export REQUEST_OWNER_WALLET_ACCOUNT=request-owner
+REQUEST_ASSETS=1000000000000000000 forge script script/Deploy.s.sol:RequestDeposit --rpc-url "$RPC_URL" --sender "$REQUEST_OWNER" --account "$REQUEST_OWNER_WALLET_ACCOUNT"
+REQUEST_SHARES=1000000000000000000 forge script script/Deploy.s.sol:RequestRedeem --rpc-url "$RPC_URL" --sender "$REQUEST_OWNER" --account "$REQUEST_OWNER_WALLET_ACCOUNT"
+```
+
+Set `REQUEST_CONTROLLER=0x...` only when the ERC-7540 controller should differ from `REQUEST_OWNER`; in that case make sure the signer is authorized for the owner/controller path and that token/share allowances are already in place.
+
 ## Safety checklist before broadcasting
 
 - Confirm the selected `RPC_URL` and verification `NETWORK`.
-- Confirm the cast wallet account or Anvil unlocked `DEPLOYER_ADDRESS` is authorized for the action.
+- Confirm the cast wallet account or Anvil unlocked sender is authorized for the action: `DEPLOYER_ADDRESS` for deployment, `BEACON_OWNER` for upgrades, or `REQUEST_OWNER` for request helpers.
 - Confirm `OWNER`, `SMART_ACCOUNT`, `UNDERLYING_TOKEN`, `VAULT_NAME`, and `VAULT_SYMBOL`.
 - Confirm dry-run deployment addresses are new/expected.
 - For upgrades, confirm the beacon currently belongs to the intended deployment.

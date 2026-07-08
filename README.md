@@ -99,6 +99,7 @@ Copy `.env.example` to `.env` and fill in values for the target chain. At minimu
 
 - `CAST_WALLET_ACCOUNT` — Foundry/cast wallet account name created with `cast wallet import <name> --interactive`.
 - `DEPLOYER_ADDRESS` — public address for that wallet. Do not store plaintext private keys in `.env`.
+- `BEACON_OWNER_WALLET_ACCOUNT` / `BEACON_OWNER` — Foundry/cast wallet account and public address for the beacon owner/admin used by upgrade broadcasts.
 - `DEPLOY_SALT` — bytes32 CREATE3 salt.
 - `OWNER` — owner/admin address for wrapper and beacon.
 - `SMART_ACCOUNT` — smart account/Safe allowed to close and settle epochs.
@@ -107,6 +108,8 @@ Copy `.env.example` to `.env` and fill in values for the target chain. At minimu
 - `RPC_URL` — RPC endpoint for deployment previews, broadcasts, and upgrades.
 - `NETWORK` — block explorer chain name for verification, such as `mainnet` or `sepolia`.
 - chain RPC and block explorer API keys as needed.
+
+Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` and optionally `REQUEST_CONTROLLER` so deposits/redeems are broadcast by the account that owns the assets/shares or an explicitly configured operator path.
 
 ## Security notes
 
