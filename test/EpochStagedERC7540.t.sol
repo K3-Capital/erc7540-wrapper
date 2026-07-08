@@ -24,6 +24,7 @@ contract EpochStagedERC7540Test is Test {
     address public safe = makeAddr("safe");
     address public alice = makeAddr("alice");
     address public bob = makeAddr("bob");
+    address public carol = makeAddr("carol");
 
     uint256 constant ONE = 1e18;
 
@@ -35,6 +36,7 @@ contract EpochStagedERC7540Test is Test {
 
         asset.mint(alice, 1_000_000 * ONE);
         asset.mint(bob, 1_000_000 * ONE);
+        asset.mint(carol, 1_000_000 * ONE);
         asset.mint(safe, 1_000_000 * ONE);
     }
 
@@ -758,6 +760,66 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
         _settle(5, 3, 1);
         assertEq(vault.maxRedeem(alice), 1, "later redeem epoch is reachable after skip");
+    }
+
+    function test_depositRoundingResidualIsAssignedToFinalEpochClaimant() public {
+        _requestDeposit(alice, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 3);
+
+        _requestDeposit(bob, 1);
+        _requestDeposit(carol, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 2, 0);
+
+        assertEq(vault.maxMint(bob), 1, "first claimant receives floored share allocation");
+        vm.prank(bob);
+        assertEq(vault.deposit(1, bob, bob), 1, "first deposit claim consumes its floor allocation");
+
+        assertEq(vault.maxMint(carol), 2, "final claimant receives deposit share residual");
+        vm.prank(carol);
+        assertEq(vault.deposit(1, carol, carol), 2, "final claim consumes remaining minted shares");
+
+        assertEq(vault.balanceOf(vault.staging()), 0, "no unclaimable staged share dust remains");
+        assertEq(vault.maxDeposit(bob), 0, "first deposit queue consumed");
+        assertEq(vault.maxDeposit(carol), 0, "final deposit queue consumed");
+    }
+
+    function test_redeemRoundingResidualIsAssignedToFinalEpochClaimant() public {
+        _requestDeposit(alice, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 3);
+
+        vm.prank(alice);
+        assertTrue(vault.transfer(bob, 1));
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        vm.prank(bob);
+        vault.requestRedeem(1, bob, bob);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 2, 1);
+
+        assertEq(vault.maxWithdraw(alice), 0, "first claimant receives floored asset allocation");
+        vm.prank(alice);
+        assertEq(vault.redeem(1, alice, alice), 0, "first redeem claim consumes its floor allocation");
+
+        uint256 bobAssetsBefore = asset.balanceOf(bob);
+        assertEq(vault.maxWithdraw(bob), 1, "final claimant receives redeem asset residual");
+        vm.prank(bob);
+        assertEq(vault.redeem(1, bob, bob), 1, "final claim consumes remaining reserved assets");
+
+        assertEq(asset.balanceOf(bob), bobAssetsBefore + 1, "final claimant receives the residual asset");
+        assertEq(asset.balanceOf(vault.staging()), 0, "no unclaimable staged asset dust remains");
+        assertEq(vault.redeemClaimReserves(), 0, "redeem reserve accounting clears after final claim");
+        assertEq(vault.maxRedeem(alice), 0, "first redeem queue consumed");
+        assertEq(vault.maxRedeem(bob), 0, "final redeem queue consumed");
     }
 
     function test_assetDonationsDoNotChangeEpochPricing() public {

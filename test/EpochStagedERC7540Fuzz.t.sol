@@ -195,7 +195,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         assertEq(vault.redeemClaimReserves(), 0, "redeem reserve fully released");
     }
 
-    function testFuzz_twoDepositorsAllocationDustStaysInStaging(
+    function testFuzz_twoDepositorsAllocationResidualGoesToFinalClaimant(
         uint128 initialSupply_,
         uint128 navSnapshot_,
         uint128 aliceAssets_,
@@ -217,7 +217,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         _settle(2, navSnapshot, 0);
 
         uint256 aliceShares = aliceAssets.mulDiv(settlementShares, totalDepositAssets, Math.Rounding.Floor);
-        uint256 bobShares = bobAssets.mulDiv(settlementShares, totalDepositAssets, Math.Rounding.Floor);
+        uint256 bobShares = settlementShares - aliceShares;
         vm.assume(aliceShares > 0 && bobShares > 0);
 
         vm.prank(alice);
@@ -226,12 +226,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         vault.deposit(bobAssets, bob, bob);
 
         assertEq(vault.balanceOf(alice), initialSupply + aliceShares, "alice gets floor allocation");
-        assertEq(vault.balanceOf(bob), bobShares, "bob gets floor allocation");
-        assertLe(settlementShares - aliceShares - bobShares, 1, "two-way allocation dust is bounded");
-        assertEq(
-            vault.balanceOf(vault.staging()),
-            settlementShares - aliceShares - bobShares,
-            "share dust remains in staging"
-        );
+        assertEq(vault.balanceOf(bob), bobShares, "bob gets remaining share allocation");
+        assertEq(vault.balanceOf(vault.staging()), 0, "no share dust remains in staging");
     }
 }
