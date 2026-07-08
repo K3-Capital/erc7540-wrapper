@@ -12,7 +12,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
-import {IERC7575} from "forge-std/interfaces/IERC7575.sol";
+import {IERC7575, IERC7575Share} from "forge-std/interfaces/IERC7575.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
@@ -265,6 +265,7 @@ contract SmartAccountWrapperTest is Test {
         assertTrue(vault.supportsInterface(type(IERC7540Redeem).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7540Operator).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7575).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7575Share).interfaceId));
         assertFalse(vault.supportsInterface(0xffffffff));
     }
 

@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC7540Operator} from "forge-std/interfaces/IERC7540.sol";
+import {IERC7575, IERC7575Share} from "forge-std/interfaces/IERC7575.sol";
 
 import {DeployHelper} from "../script/utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
@@ -130,5 +131,15 @@ contract ERC7540ComplianceTest is Test {
         vault.previewWithdraw(1);
         vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewRedeem(1);
+    }
+
+    function test_erc7575ShareSideCompatibilityWhenShareIsVault() public view {
+        IERC7575Share shareToken = IERC7575Share(vault.share());
+
+        assertEq(vault.share(), address(vault));
+        assertEq(shareToken.vault(address(asset)), address(vault));
+        assertEq(shareToken.vault(address(0xBEEF)), address(0));
+        assertTrue(vault.supportsInterface(type(IERC7575).interfaceId));
+        assertTrue(vault.supportsInterface(type(IERC7575Share).interfaceId));
     }
 }
