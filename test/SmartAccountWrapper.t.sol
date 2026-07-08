@@ -8,6 +8,7 @@ import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "forge-std/interfaces/IERC7540.sol";
@@ -70,6 +71,17 @@ contract SmartAccountWrapperTest is Test {
         asset.mint(user, 1_000_000e18);
     }
 
+    function deploySmartAccountWrapperForTest(
+        address beacon,
+        address owner_,
+        address smartAccount_,
+        address underlyingToken_
+    ) external returns (SmartAccountWrapper) {
+        return DeployHelper.deploySmartAccountWrapper(
+            beacon, owner_, smartAccount_, underlyingToken_, "SmartAccountWrapper", "SAW"
+        );
+    }
+
     function test_deploy() public view {
         assertEq(vault.smartAccount(), safe);
         assertEq(vault.asset(), address(asset));
@@ -85,19 +97,25 @@ contract SmartAccountWrapperTest is Test {
         impl.closeEpoch();
     }
 
-    function test_initializeRejectsZeroAddresses() public {
+    function test_implementationCannotBeInitializedDirectly() public {
         SmartAccountWrapper impl = new SmartAccountWrapper();
 
-        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
-        impl.initialize(address(0), safe, address(asset), "SmartAccountWrapper", "SAW");
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        impl.initialize(address(this), safe, address(asset), "SmartAccountWrapper", "SAW");
+    }
 
-        impl = new SmartAccountWrapper();
-        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
-        impl.initialize(address(this), address(0), address(asset), "SmartAccountWrapper", "SAW");
+    function test_initializeRejectsZeroAddresses() public {
+        SmartAccountWrapper impl = new SmartAccountWrapper();
+        address beacon = DeployHelper.deployBeacon(address(impl), address(this));
 
-        impl = new SmartAccountWrapper();
-        vm.expectRevert(EpochStagedERC7540Vault.SA__ZeroAddress.selector);
-        impl.initialize(address(this), safe, address(0), "SmartAccountWrapper", "SAW");
+        vm.expectRevert();
+        this.deploySmartAccountWrapperForTest(beacon, address(0), safe, address(asset));
+
+        vm.expectRevert();
+        this.deploySmartAccountWrapperForTest(beacon, address(this), address(0), address(asset));
+
+        vm.expectRevert();
+        this.deploySmartAccountWrapperForTest(beacon, address(this), safe, address(0));
     }
 
     function test_onlySafeCanCloseAndSettle() public {
@@ -170,14 +188,18 @@ contract SmartAccountWrapperTest is Test {
         vault.pause();
         assertTrue(vault.paused(), "pauser can pause");
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, pauserRole)
+        );
         vm.prank(user);
         vault.pause();
 
         vault.revokeRole(pauserRole, pauser);
         vault.unpause();
 
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, pauserRole)
+        );
         vm.prank(pauser);
         vault.pause();
     }
@@ -197,7 +219,9 @@ contract SmartAccountWrapperTest is Test {
         vault.setSmartAccount(makeAddr("newSafe"));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, pauser, vault.DEFAULT_ADMIN_ROLE()
+            )
         );
         vault.grantRole(pauserRole, user);
 
