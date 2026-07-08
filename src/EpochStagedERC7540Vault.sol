@@ -623,6 +623,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         DepositClaimData storage claim = $.depositClaims[epochId][controller];
         uint256 assets = epoch.depositAssets[controller];
         uint256 remainingAssets = assets - claim.assetsClaimed;
+        // If this controller holds the settlement's last unclaimed deposit assets,
+        // assign all remaining minted shares here so per-controller floor rounding
+        // cannot leave share dust stranded in Staging.
         if (remainingAssets == settlement.totalDepositAssets - settlement.depositAssetsClaimed) {
             return settlement.depositSharesMinted - settlement.depositSharesClaimed;
         }
@@ -642,6 +645,9 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         RedeemClaimData storage claim = $.redeemClaims[epochId][controller];
         uint256 shares = epoch.redeemShares[controller];
         uint256 remainingShares = shares - claim.sharesClaimed;
+        // If this controller holds the settlement's last unclaimed redeem shares,
+        // assign all remaining reserved assets here so per-controller floor rounding
+        // cannot leave asset dust stranded in Staging or redeemClaimReserves().
         if (remainingShares == settlement.totalRedeemShares - settlement.redeemSharesClaimed) {
             return settlement.redeemAssetsReserved - settlement.redeemAssetsClaimed;
         }
