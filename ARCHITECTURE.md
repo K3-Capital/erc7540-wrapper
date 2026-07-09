@@ -102,6 +102,7 @@ flowchart TB
 - **Pending assets and shares live in a separate `Staging` contract.** The name and design should be project-specific and should not reference third-party implementations.
 - **No synchronous deposit or withdrawal path in v1.** All user entry and exit goes through ERC-7540 request and claim flows.
 - **Rounding dust stays with remaining shareholders.** Settlement and claim rounding residuals are not redirected to a fee receiver in v1. Claim-time per-epoch residuals are assigned to the final claimant for that epoch/side so no staged share or asset dust remains stranded.
+- **Pause is request-only.** Pausing the wrapper blocks new deposit and redeem requests, but it does not freeze Safe settlement operations or user/operator claims for already-settled epochs. The ERC-4626 `max*` claim views remain truthful while paused.
 
 ---
 
@@ -559,6 +560,8 @@ Because both sides are async:
 | `maxWithdraw(address controller)` | Return claimable redeem assets for controller's oldest claimable redeem epoch. |
 | `maxRedeem(address controller)` | Return claimable redeem shares for controller's oldest claimable redeem epoch. |
 
+Pause does not zero these `max*` claim views. A paused wrapper rejects new `requestDeposit` and `requestRedeem` calls, but already-settled claims remain executable and the `max*` functions continue to report the same oldest-epoch claimable capacity that the matching claim function can consume.
+
 ### ERC-7575 / ERC-165
 
 ERC-7540 requires ERC-7575 and ERC-165. For a single-share-token vault:
@@ -680,6 +683,7 @@ Claims can send output to an arbitrary `receiver`, but only the controller or it
 | Fully async UX | Users submit request then claim later; no instant deposits or withdrawals. | ERC-7540-compatible routers/operators can automate claim UX. |
 | Single frozen epoch throughput limit | The Safe cannot freeze another epoch until the previous frozen epoch is settled, so a stuck settlement delays the next freeze. | Keep ops settlement in the same backoffice batch as NAV update and funding; monitor frozen epoch age. |
 | Net settlement complexity | Settlement can net staged deposits against redeem assets, so implementation must carefully reserve claim assets and transfer only true surplus to the Safe. | Enforce `post-settlement claim reserve >= redeemAssetsReserved`; test deposit-heavy, redeem-heavy, and balanced epochs. |
+| Request-only pause | Pausing stops new user requests but does not freeze close, settlement, or already-settled claims. | Treat pause as a request intake circuit breaker, not a custody freeze; use upgrade/admin governance if an audited emergency freeze of claims is ever required. |
 | Token behavior assumptions | Fee-on-transfer, rebasing, or callback-enabled assets/shares can break staged accounting if nominal transfer amounts are trusted. | Prefer standard non-rebasing ERC-20 assets; otherwise measure balance deltas and add reentrancy protection around request, settlement, and claim paths. |
 | Upgrade/admin trust | Owner can upgrade implementation. | Multisig controls, explicit disclosures, optional timelock in future. |
 | No cancellation in v1 | ERC-7540 does not require cancellation, but users cannot unwind a pending request before settlement. | Keep epoch cadence predictable; consider an optional open-epoch-only cancellation extension later if product needs it. |

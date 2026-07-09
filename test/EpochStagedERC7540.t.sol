@@ -370,10 +370,7 @@ contract EpochStagedERC7540Test is Test {
 
         assertEq(vault.frozenEpochId(), 0, "paused settlement clears frozen epoch");
         assertEq(vault.currentEpochId(), 2, "paused ops can advance epoch");
-        assertEq(vault.maxDeposit(alice), 0, "claims remain blocked in max views while paused");
-
-        vault.unpause();
-        assertEq(vault.maxDeposit(alice), 100 * ONE, "claim becomes visible after unpause");
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "claim remains visible while paused");
 
         uint256 shares = _claimDeposit(alice, 100 * ONE);
         assertEq(shares, 100 * ONE, "deposit remains claimable after paused settlement");
@@ -402,7 +399,7 @@ contract EpochStagedERC7540Test is Test {
         }
     }
 
-    function test_maxViewsReturnZeroWhenPausedOrNoClaimableEpoch() public {
+    function test_maxViewsReturnClaimableAmountsWhenPausedOrZeroWithoutClaimableEpoch() public {
         assertEq(vault.maxDeposit(alice), 0, "no deposit claim");
         assertEq(vault.maxMint(alice), 0, "no mint claim");
         assertEq(vault.maxWithdraw(alice), 0, "no withdraw claim");
@@ -415,8 +412,8 @@ contract EpochStagedERC7540Test is Test {
         _settle(1, 0, 0);
 
         vault.pause();
-        assertEq(vault.maxDeposit(alice), 0, "paused deposit max");
-        assertEq(vault.maxMint(alice), 0, "paused mint max");
+        assertEq(vault.maxDeposit(alice), 100 * ONE, "paused deposit max stays claimable");
+        assertEq(vault.maxMint(alice), 100 * ONE, "paused mint max stays claimable");
         assertEq(vault.maxWithdraw(alice), 0, "paused withdraw max");
         assertEq(vault.maxRedeem(alice), 0, "paused redeem max");
         vault.unpause();
@@ -430,8 +427,8 @@ contract EpochStagedERC7540Test is Test {
         _settle(2, 100 * ONE, 25 * ONE);
 
         vault.pause();
-        assertEq(vault.maxWithdraw(alice), 0, "paused withdraw claim max");
-        assertEq(vault.maxRedeem(alice), 0, "paused redeem claim max");
+        assertEq(vault.maxWithdraw(alice), 25 * ONE, "paused withdraw claim max stays claimable");
+        assertEq(vault.maxRedeem(alice), 25 * ONE, "paused redeem claim max stays claimable");
     }
 
     function test_requestRedeem_settleWithNettingAndClaimAssets() public {

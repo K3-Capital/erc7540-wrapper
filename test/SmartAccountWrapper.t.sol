@@ -149,6 +149,7 @@ contract SmartAccountWrapperTest is Test {
         vault.settleEpoch(1, 0);
 
         vault.pause();
+        assertEq(vault.maxDeposit(user), 100e18, "settled claim remains visible while paused");
         vm.prank(user);
         vault.deposit(100e18, user, user);
         assertEq(vault.balanceOf(user), 100e18);
