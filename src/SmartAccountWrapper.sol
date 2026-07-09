@@ -139,10 +139,6 @@ contract SmartAccountWrapper is
         return smartAccount();
     }
 
-    function _claimsPaused() internal view override returns (bool) {
-        return paused();
-    }
-
     function rescue(address token, uint256 amount) external onlyOwner {
         if (token == asset()) {
             if (amount > assetSurplus()) revert SA__InsufficientSettlementAssets();
