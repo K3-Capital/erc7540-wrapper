@@ -137,6 +137,12 @@ flowchart TB
 3. **Ops / valuation process** controls the Safe and computes the post-fee active Safe NAV used for settlement. Incorrect NAV can misprice an epoch.
 4. **Users and ERC-7540 operators** can submit requests but cannot force pricing. They only receive settlement pricing once an epoch is settled.
 
+### ERC-1271 signature support
+
+`SmartAccountWrapper` does not implement ERC-1271 in the current version. ERC-7540, ERC-7575, and ERC-4626 compatibility does not require `isValidSignature`, and the core protocol does not use signatures for request, claim, close, or settlement authorization.
+
+Keeping the wrapper out of ERC-1271 avoids an ambiguous signer domain between `owner()` and `smartAccount()`. If an integration later needs the wrapper contract to validate off-chain approvals, an implementation upgrade can add ERC-1271 with an explicit decision about whether the signer domain is owner/admin consent, strategy Safe consent, or a separate domain-specific scheme.
+
 ---
 
 ## 4. Core Accounting Model

@@ -7,8 +7,6 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Redeem, IERC7540Operator} from "forge-std/interfaces/IERC7540.sol";
 import {IERC7575, IERC7575Share} from "forge-std/interfaces/IERC7575.sol";
 
@@ -20,15 +18,11 @@ contract SmartAccountWrapper is
     Ownable2StepUpgradeable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    EpochStagedERC7540Vault,
-    IERC1271
+    EpochStagedERC7540Vault
 {
     using SafeERC20 for IERC20;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
-    bytes4 private constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
-    bytes4 private constant ERC1271_INVALID = 0xffffffff;
 
     event SmartAccountSet(address smartAccount);
 
@@ -157,17 +151,10 @@ contract SmartAccountWrapper is
         Staging(staging()).transferToken(token, owner(), amount);
     }
 
-    function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
-        if (SignatureChecker.isValidSignatureNow(owner(), hash, signature)) {
-            return ERC1271_MAGIC_VALUE;
-        }
-        return ERC1271_INVALID;
-    }
-
     function supportsInterface(bytes4 interfaceId) public view override(AccessControlUpgradeable) returns (bool) {
         return super.supportsInterface(interfaceId) || interfaceId == type(IERC7540).interfaceId
             || interfaceId == type(IERC7540Deposit).interfaceId || interfaceId == type(IERC7540Redeem).interfaceId
             || interfaceId == type(IERC7540Operator).interfaceId || interfaceId == type(IERC7575).interfaceId
-            || interfaceId == type(IERC7575Share).interfaceId || interfaceId == type(IERC1271).interfaceId;
+            || interfaceId == type(IERC7575Share).interfaceId;
     }
 }
