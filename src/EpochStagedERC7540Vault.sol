@@ -191,28 +191,24 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
     }
 
     function maxDeposit(address controller) public view override returns (uint256) {
-        if (_claimsPaused()) return 0;
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) return 0;
         return claimableDepositRequest(epochId, controller);
     }
 
     function maxMint(address controller) public view override returns (uint256) {
-        if (_claimsPaused()) return 0;
         uint40 epochId = _oldestDepositClaimEpoch(controller);
         if (epochId == 0) return 0;
         return _remainingDepositShares(_getEpochStagedERC7540VaultStorage(), epochId, controller);
     }
 
     function maxWithdraw(address controller) public view override returns (uint256) {
-        if (_claimsPaused()) return 0;
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) return 0;
         return _remainingRedeemAssets(_getEpochStagedERC7540VaultStorage(), epochId, controller);
     }
 
     function maxRedeem(address controller) public view override returns (uint256) {
-        if (_claimsPaused()) return 0;
         uint40 epochId = _oldestRedeemClaimEpoch(controller);
         if (epochId == 0) return 0;
         return claimableRedeemRequest(epochId, controller);
@@ -237,10 +233,6 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
     function _asyncPreviewRevert() internal view returns (uint256) {
         if (gasleft() == type(uint256).max) return 0;
         revert SA__AsyncOnly();
-    }
-
-    function _claimsPaused() internal view virtual returns (bool) {
-        return false;
     }
 
     function _toEpochId(uint256 requestId) internal pure returns (uint40) {
