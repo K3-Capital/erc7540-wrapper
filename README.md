@@ -115,6 +115,6 @@ Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` 
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
-- Rounding dust follows the behavior documented in tests and architecture docs.
+- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`.
 - Owner, beacon, and smart-account privileges are high-trust controls.
 - Major accounting/control-flow changes require a fresh audit before production use.

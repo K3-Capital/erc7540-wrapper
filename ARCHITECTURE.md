@@ -101,7 +101,7 @@ flowchart TB
 - **Redeem funding is pre-transferred by the Safe.** The backoffice system batches the asset transfer and `settleEpoch` call in the same Safe transaction batch; the vault does not pull redeem assets from Safe allowance in v1.
 - **Pending assets and shares live in a separate `Staging` contract.** The name and design should be project-specific and should not reference third-party implementations.
 - **No synchronous deposit or withdrawal path in v1.** All user entry and exit goes through ERC-7540 request and claim flows.
-- **Rounding dust stays with remaining shareholders.** Settlement and claim rounding residuals are not redirected to a fee receiver in v1.
+- **Rounding dust stays with remaining shareholders.** Settlement and claim rounding residuals are not redirected to a fee receiver in v1. Claim-time per-epoch residuals are assigned to the final claimant for that epoch/side so no staged share or asset dust remains stranded.
 
 ---
 
@@ -398,7 +398,7 @@ Rounding rules should be conservative:
 - redeem assets round down,
 - `mint` and `withdraw` claim variants use the corresponding ceil math where required by ERC-4626 semantics.
 
-Rounding residuals stay with remaining shareholders in v1. Settlement and claim rounding dust is not redirected to a fee receiver.
+Rounding residuals stay with remaining shareholders in v1. Settlement and claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
 
 ### NAV sanity checks
 
@@ -489,6 +489,8 @@ ERC-7540 requires users to pull outputs through ERC-4626 claim functions. The va
 Because multiple settled epochs can remain unclaimed for the same controller, claim accounting is tracked by `(epochId, controller)` internally. ERC-4626 claim functions do not include a request ID, so the implementation uses a deterministic claim-selection policy: each claim consumes only the controller's oldest claimable epoch for that side. If a controller has claimable balances in later epochs, they must submit additional claim calls after the oldest epoch is fully claimed.
 
 For each settled epoch/controller, the implementation stores claimed counters only: deposit `assetsClaimed` / `sharesClaimed` and redeem `sharesClaimed` / `assetsClaimed`. Remaining claimable shares/assets are derived from the original epoch request totals and settlement totals using the same rounding direction as the claim function.
+
+Claim-time rounding residuals are intentionally assigned to the final claimant for the epoch/side. For deposit claims, earlier controllers receive their floor share allocation and the controller whose claim consumes the last remaining deposit assets receives all remaining minted shares for that epoch. For redeem claims, earlier controllers receive their floor asset allocation and the controller whose claim consumes the last remaining redeem shares receives all remaining reserved assets for that epoch. This policy is claim-order dependent, but it avoids per-controller entitlement storage, preserves scalable lazy claims, and ensures final claims clear `Staging` share/asset dust and redeem reserve accounting.
 
 `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` expose only the currently oldest claimable epoch for the controller. They do not aggregate across multiple claimable epochs because one claim call does not span epochs in v1. When claims are paused, these `max*` functions return zero.
 
@@ -665,7 +667,7 @@ Claims can send output to an arbitrary `receiver`, but only the controller or it
 12. **ERC-4626 previews revert** for all async sides: deposit, mint, withdraw, and redeem previews all revert in the fully async mode.
 13. **ERC-7540 views are caller-independent** and separate Pending from Claimable amounts.
 14. **Claims consume oldest epoch only**: a claim call cannot skip an older claimable epoch or span into a later epoch.
-15. **Rounding dust stays with remaining shareholders** unless a future version explicitly changes the dust policy.
+15. **Rounding dust stays with remaining shareholders** unless a future version explicitly changes the dust policy. Within a settled epoch, claim-time residual dust is assigned to the final claimant for that epoch/side rather than to a fee receiver or stranded reserve.
 
 ---
 
@@ -800,6 +802,6 @@ function rescueStagedToken(address token, uint256 amount) external;
 8. **Settlement funding check**: Safe pre-transfers any required underlying before `settleEpoch`; no allowance-pull path in v1.
 9. **Staging location**: pending assets and shares live in a separate `Staging` contract.
 10. **No synchronous escape hatch**: sync deposit/mint/withdraw/redeem are disabled as entry/exit paths in v1; those ERC-4626 methods are claim functions only.
-11. **Rounding and dust**: rounding residuals stay with remaining shareholders.
+11. **Rounding and dust**: rounding residuals stay with remaining shareholders. V1 keeps the current O(1) lazy-claim accounting, so per-epoch claim residuals are assigned to the final claimant for the relevant side. This is acceptable for the intended standard 18-decimal, non-fee, non-rebasing deployment assets; low-decimal assets or materially unusual settlement ratios should be re-evaluated before launch.
 12. **Emergency settlement**: no normal callable emergency settlement function in v1. If a frozen epoch must be force-settled, the absolute last resort hatch is a vault proxy implementation upgrade with distinct emergency events and explicit impairment/recovery disclosure.
 13. **Pause behavior**: `requestDeposit` and `requestRedeem` are paused by `SmartAccountWrapper`; claim functions remain callable, while `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` return zero when paused.
