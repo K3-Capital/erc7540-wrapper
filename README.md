@@ -2,6 +2,8 @@
 
 Epoch-staged ERC-7540/ERC-4626 wrapper for a manually managed smart account/Safe.
 
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the as-built architecture, accounting model, trust assumptions, and audit-facing design notes.
+
 The current contracts implement a fully asynchronous request -> epoch close -> settlement -> claim flow:
 
 - `requestDeposit` stages assets in `Staging` and records the request for the current epoch.
