@@ -2,6 +2,8 @@
 
 Epoch-staged ERC-7540/ERC-4626 wrapper for a manually managed smart account/Safe.
 
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the as-built architecture, accounting model, trust assumptions, and audit-facing design notes.
+
 The current contracts implement a fully asynchronous request -> epoch close -> settlement -> claim flow:
 
 - `requestDeposit` stages assets in `Staging` and records the request for the current epoch.
@@ -115,7 +117,7 @@ Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` 
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
-- Rounding dust follows the behavior documented in tests and architecture docs.
+- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`.
 - Owner, beacon, and smart-account privileges are high-trust controls.
 - Pause blocks new `requestDeposit` and `requestRedeem` calls only. The configured smart account may still close/settle epochs, and users/operators may still claim already-settled shares/assets; `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` continue to report claimable amounts while paused.
 - Major accounting/control-flow changes require a fresh audit before production use.
