@@ -46,6 +46,12 @@ Settlement + user claims
 
 The wrapper is upgradeable through an `UpgradeableBeacon`; all beacon upgrade authority belongs to the configured owner.
 
+### ERC-1271 support
+
+`SmartAccountWrapper` does not implement ERC-1271 signature validation in the current version. The core ERC-7540/ERC-4626 flow does not use contract signatures: user requests and claims are direct token/vault calls, and settlement authority is enforced by `msg.sender == smartAccount()` for `closeEpoch` and `settleEpoch`.
+
+If a future integration needs the wrapper itself to act as a contract-wallet-style signing identity, ERC-1271 can be added in an implementation upgrade with an explicit signer domain.
+
 ## Licensing
 
 This repository uses mixed licensing on a file-by-file basis:
