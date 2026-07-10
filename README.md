@@ -123,7 +123,7 @@ Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` 
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
-- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`.
+- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`. In extreme dust cases, a non-final claim can round to zero output; claiming it intentionally burns/consumes that dust claim and advances the controller's epoch queue.
 - Owner, beacon, and smart-account privileges are high-trust controls.
 - While an epoch is frozen, underlying-asset rescue and smart-account rotation are blocked so settlement prefunds cannot be redirected before reserve accounting is booked. Rescue of unrelated tokens remains available.
 - Pause blocks new `requestDeposit` and `requestRedeem` calls only. The configured smart account may still close/settle epochs, and users/operators may still claim already-settled shares/assets; `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` continue to report claimable amounts while paused.
