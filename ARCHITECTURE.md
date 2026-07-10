@@ -99,6 +99,7 @@ flowchart TB
 - **Claims consume the oldest claimable epoch only.** A single ERC-4626 claim call does not span multiple epochs. Users/controllers repeat claims to consume later epochs.
 - **NAV is post-fee.** `navSnapshot` should be reported after management/performance/strategy fees have already been applied at the Safe/accounting layer.
 - **Redeem funding is pre-transferred by the Safe.** The backoffice system batches the asset transfer and `settleEpoch` call in the same Safe transaction batch; the vault does not pull redeem assets from Safe allowance in v1.
+- **Frozen epochs lock settlement-critical admin paths.** While `frozenEpochId() != 0`, the owner cannot rescue the underlying asset from the wrapper or rotate the configured smart account. Unrelated-token rescue remains available.
 - **Pending assets and shares live in a separate `Staging` contract.** The name and design should be project-specific and should not reference third-party implementations.
 - **No synchronous deposit or withdrawal path in v1.** All user entry and exit goes through ERC-7540 request and claim flows.
 - **Rounding dust stays with remaining shareholders.** Settlement and claim rounding residuals are not redirected to a fee receiver in v1. Claim-time per-epoch residuals are assigned to the final claimant for that epoch/side so no staged share or asset dust remains stranded.
@@ -655,7 +656,7 @@ Claims can send output to an arbitrary `receiver`, but only the controller or it
 - Staging should support per-epoch accounting or wrapper-enforced per-epoch accounting so frozen-epoch assets/shares cannot be confused with open-epoch assets/shares,
 - Staging should not call the Safe or perform NAV-sensitive logic,
 - `SmartAccountWrapper.rescueStagedToken` is owner-only and rejects the underlying asset and wrapper share token, so it cannot drain normal staged request assets/shares from `Staging`,
-- `SmartAccountWrapper.rescue(asset, amount)` is owner-only and sends underlying surplus from the wrapper to the Safe. Redeem claim reserves live in `Staging` after settlement, but pre-settlement funding temporarily held by the wrapper is still admin-trusted during the settlement window,
+- `SmartAccountWrapper.rescue(asset, amount)` is owner-only and sends underlying surplus from the wrapper to the Safe only when no frozen epoch exists. Redeem claim reserves live in `Staging` after settlement, and pre-settlement funding temporarily held by the wrapper cannot be rescued until the frozen epoch settles,
 - rescue functions do not emit dedicated rescue events in the current implementation beyond token transfer events.
 
 ---
@@ -794,7 +795,7 @@ function rescue(address token, uint256 amount) external;
 function rescueStagedToken(address token, uint256 amount) external;
 ```
 
-`closeEpoch` and `settleEpoch` are restricted to the configured Strategy Safe / smart account. `setSmartAccount`, `unpause`, and both rescue functions are owner-only. `pause` is callable by owner or `PAUSER_ROLE`.
+`closeEpoch` and `settleEpoch` are restricted to the configured Strategy Safe / smart account. `setSmartAccount`, `unpause`, and both rescue functions are owner-only. `setSmartAccount` and underlying-asset `rescue` revert while an epoch is frozen; non-underlying rescue remains owner-callable. `pause` is callable by owner or `PAUSER_ROLE`.
 
 ---
 
@@ -815,3 +816,4 @@ function rescueStagedToken(address token, uint256 amount) external;
 11. **Rounding and dust**: rounding residuals stay with remaining shareholders. V1 keeps the current O(1) lazy-claim accounting, so per-epoch claim residuals are assigned to the final claimant for the relevant side. This is acceptable for the intended standard 18-decimal, non-fee, non-rebasing deployment assets; low-decimal assets or materially unusual settlement ratios should be re-evaluated before launch.
 12. **Emergency settlement**: no normal callable emergency settlement function in v1. If a frozen epoch must be force-settled, the absolute last resort hatch is a vault proxy implementation upgrade with distinct emergency events and explicit impairment/recovery disclosure.
 13. **Pause behavior**: `requestDeposit` and `requestRedeem` are paused by `SmartAccountWrapper`; claim functions remain callable, while `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` return zero when paused.
+14. **Frozen-epoch admin guard**: owner-controlled underlying rescue and smart-account rotation are disabled while a closed-but-unsettled epoch exists, protecting settlement prefunds from being redirected before `settleEpoch` books reserves.
