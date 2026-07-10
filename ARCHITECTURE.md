@@ -607,6 +607,8 @@ Operators are approved per controller.
 - otherwise the call must spend ERC-20 share allowance from `owner` to `msg.sender`,
 - this request-time share authorization is separate from controller claim authorization. The operator no-allowance path is intentionally limited to `controller == owner` so an operator cannot redirect the owner's shares into an unrelated controller bucket.
 
+When the fallback ERC-20 share allowance path is used, the allowance spender can choose the request's `controller` bucket. That is equivalent to the owner allowing the spender to move the owner's vault shares, and the chosen controller, or one of that controller's approved ERC-7540 operators, controls the later claim and receiver choice. Integrators should prefer the ERC-7540 operator path for delegated requests that must keep `controller == owner`, and users should only grant share allowance to callers they trust to choose the intended controller.
+
 ### Claim authorization
 
 `deposit`, `mint`, `redeem`, and `withdraw` with a `controller` parameter:
@@ -817,5 +819,5 @@ function rescueStagedToken(address token, uint256 amount) external;
 10. **No synchronous escape hatch**: sync deposit/mint/withdraw/redeem are disabled as entry/exit paths in v1; those ERC-4626 methods are claim functions only.
 11. **Rounding and dust**: rounding residuals stay with remaining shareholders. V1 keeps the current O(1) lazy-claim accounting, so per-epoch claim residuals are assigned to the final claimant for the relevant side. This is acceptable for the intended standard 18-decimal, non-fee, non-rebasing deployment assets; low-decimal assets or materially unusual settlement ratios should be re-evaluated before launch.
 12. **Emergency settlement**: no normal callable emergency settlement function in v1. If a frozen epoch must be force-settled, the absolute last resort hatch is a vault proxy implementation upgrade with distinct emergency events and explicit impairment/recovery disclosure.
-13. **Pause behavior**: `requestDeposit` and `requestRedeem` are paused by `SmartAccountWrapper`; claim functions remain callable, while `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` return zero when paused.
+13. **Pause behavior**: `requestDeposit` and `requestRedeem` are paused by `SmartAccountWrapper`; claim functions remain callable, and `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` continue to report the amounts those claim functions can consume while paused.
 14. **Frozen-epoch admin guard**: owner-controlled underlying rescue and smart-account rotation are disabled while a closed-but-unsettled epoch exists, protecting settlement prefunds from being redirected before `settleEpoch` books reserves.
