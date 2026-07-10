@@ -407,6 +407,8 @@ Rounding rules should be conservative:
 
 Rounding residuals stay with remaining shareholders in v1. Settlement and claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
 
+The same floor-allocation rule means an extreme non-final dust claim can have nonzero claim shares/assets on one side while the corresponding claim output rounds to zero. This is accepted v1 behavior rather than a separate protocol error path: the controller or an approved ERC-7540 operator can intentionally call the normal claim function, burn/consume that dust claim for zero output, and advance the controller's epoch queue so later settled epochs become reachable. Operationally this should only occur for uneconomic dust amounts; users should avoid creating such small requests when they want guaranteed nonzero claim output.
+
 ### NAV sanity checks
 
 Because NAV is manually reported by the Safe, settlement includes the following guardrails even though the Safe is trusted:
