@@ -147,6 +147,24 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.allowance(alice, bob), 0, "spender allowance consumed");
     }
 
+    function test_operatorCannotRedirectVictimFundedDepositToSeparateController() public {
+        vm.startPrank(alice);
+        asset.approve(address(vault), 25 * ONE);
+        vault.setOperator(bob, true);
+        vm.stopPrank();
+
+        vm.prank(carol);
+        vault.setOperator(bob, true);
+
+        vm.prank(bob);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestDeposit(25 * ONE, carol, alice);
+
+        assertEq(vault.pendingDepositRequest(1, alice), 0, "victim owner has no request");
+        assertEq(vault.pendingDepositRequest(1, carol), 0, "attacker controller has no redirected request");
+        assertEq(asset.balanceOf(vault.staging()), 0, "victim assets were not staged");
+    }
+
     function test_operatorCanRequestRedeemForControllerWithoutShareAllowance() public {
         _requestDeposit(alice, 100 * ONE);
         vm.prank(safe);
@@ -358,6 +376,29 @@ contract EpochStagedERC7540Test is Test {
 
         assertEq(vault.frozenEpochId(), 0, "following settlement clears frozen epoch");
         assertEq(vault.maxDeposit(bob), 50 * ONE, "following deposit remains claimable");
+    }
+
+    function test_settleEpoch_revertsIfFullRedeemWouldLeaveZeroSupplyWithActiveAssets() public {
+        _requestDeposit(alice, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 1);
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        _requestDeposit(bob, 1);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.startPrank(safe);
+        assertTrue(asset.transfer(address(vault), 1));
+        vm.expectRevert(EpochStagedERC7540Vault.SA__InvalidNavSnapshot.selector);
+        vault.settleEpoch(2, 2);
+        vm.stopPrank();
+
+        assertEq(vault.frozenEpochId(), 2, "failed settlement keeps epoch frozen for retry");
     }
 
     function test_closeAndSettleEpoch_whenPaused() public {
@@ -757,6 +798,67 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
         _settle(5, 3, 1);
         assertEq(vault.maxRedeem(alice), 1, "later redeem epoch is reachable after skip");
+    }
+
+    function test_partialZeroShareDepositClaimDoesNotAdvanceQueue() public {
+        _requestDeposit(alice, 2);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 2);
+
+        _requestDeposit(bob, 2);
+        _requestDeposit(carol, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 5, 0);
+
+        assertEq(vault.maxDeposit(bob), 2, "bob has deposit assets to claim");
+        assertEq(vault.maxMint(bob), 0, "bob's non-final share allocation rounds to zero");
+
+        vm.prank(bob);
+        assertEq(vault.deposit(1, bob, bob), 0, "partial claim can round to zero shares");
+
+        assertEq(vault.maxDeposit(bob), 1, "remaining deposit assets stay queued");
+        assertEq(vault.maxMint(bob), 0, "remaining share output is still zero");
+
+        vm.prank(bob);
+        assertEq(vault.deposit(1, bob, bob), 0, "final zero-share claim consumes bob's queue entry");
+        assertEq(vault.maxDeposit(bob), 0, "fully consumed zero-share claim advances");
+    }
+
+    function test_partialZeroAssetRedeemClaimDoesNotAdvanceQueue() public {
+        _requestDeposit(alice, 5);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 5);
+
+        vm.prank(alice);
+        assertTrue(vault.transfer(bob, 2));
+        vm.prank(alice);
+        assertTrue(vault.transfer(carol, 3));
+
+        vm.prank(bob);
+        vault.requestRedeem(2, bob, bob);
+        vm.prank(carol);
+        vault.requestRedeem(3, carol, carol);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 2, 2);
+
+        assertEq(vault.maxRedeem(bob), 2, "bob has redeem shares to claim");
+        assertEq(vault.maxWithdraw(bob), 0, "bob's non-final asset allocation rounds to zero");
+
+        vm.prank(bob);
+        assertEq(vault.redeem(1, bob, bob), 0, "partial claim can round to zero assets");
+
+        assertEq(vault.maxRedeem(bob), 1, "remaining redeem shares stay queued");
+        assertEq(vault.maxWithdraw(bob), 0, "remaining asset output is still zero");
+
+        vm.prank(bob);
+        assertEq(vault.redeem(1, bob, bob), 0, "final zero-asset claim consumes bob's queue entry");
+        assertEq(vault.maxRedeem(bob), 0, "fully consumed zero-asset claim advances");
     }
 
     function test_depositRoundingResidualIsAssignedToFinalEpochClaimant() public {

@@ -257,9 +257,8 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (controller == address(0) || owner == address(0)) revert SA__ZeroAddress();
         address caller = _msgSender();
         if (caller != owner && !isOperator(owner, caller)) revert SA__NotAuthorized();
-        if (controller != owner && (controller == caller || !isOperator(controller, caller))) {
-            revert SA__NotAuthorized();
-        }
+        if (caller != owner && controller != owner) revert SA__NotAuthorized();
+        if (caller == owner && controller != owner && !isOperator(controller, caller)) revert SA__NotAuthorized();
 
         EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         uint40 epochId = $.currentEpochId;
@@ -360,6 +359,10 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
 
         (uint256 depositShares, uint256 redeemAssets) =
             _settlementAmounts(navSnapshot, supplySnapshot, epoch.totalDepositAssets, epoch.totalRedeemShares);
+        uint256 postSupply = supplySnapshot + depositShares - epoch.totalRedeemShares;
+        uint256 postAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
+        if (postSupply == 0 && postAssets != 0) revert SA__InvalidNavSnapshot();
+        if (postSupply != 0 && postAssets == 0) revert SA__InvalidNavSnapshot();
 
         if (epoch.totalDepositAssets > 0) {
             $.staging.transferToken(asset(), address(this), epoch.totalDepositAssets);
@@ -516,10 +519,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         settlement.depositAssetsClaimed += assets;
         settlement.depositSharesClaimed += shares;
         if (shares > 0) _transfer(staging(), receiver, shares);
-        if (
-            claim.assetsClaimed == $.epochs[epochId].depositAssets[controller]
-                || _remainingDepositShares($, epochId, controller) == 0
-        ) {
+        if (claim.assetsClaimed == $.epochs[epochId].depositAssets[controller]) {
             _advanceDepositEpoch($, controller, epochId);
         }
         emit Deposit(_msgSender(), receiver, assets, shares);
@@ -603,10 +603,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         settlement.redeemAssetsClaimed += assets;
         $.totalRedeemClaimReserves -= assets;
         if (assets > 0) $.staging.transferToken(asset(), receiver, assets);
-        if (
-            claim.sharesClaimed == $.epochs[epochId].redeemShares[controller]
-                || _remainingRedeemAssets($, epochId, controller) == 0
-        ) {
+        if (claim.sharesClaimed == $.epochs[epochId].redeemShares[controller]) {
             _advanceRedeemEpoch($, controller, epochId);
         }
         emit Withdraw(_msgSender(), receiver, controller, assets, shares);

@@ -123,7 +123,7 @@ Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` 
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
-- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`. In extreme dust cases, a non-final claim can round to zero output; claiming it intentionally burns/consumes that dust claim and advances the controller's epoch queue.
+- Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`. In extreme dust cases, a non-final claim can round to zero output; fully claiming that zero-output request intentionally burns/consumes the dust claim and advances the controller's epoch queue.
 - Share allowance for `requestRedeem` authorizes the caller to lock the owner's shares into the caller-selected controller bucket. The controller, or one of its approved ERC-7540 operators, controls the later claim and receiver choice.
 - Owner, beacon, and smart-account privileges are high-trust controls.
 - While an epoch is frozen, underlying-asset rescue and smart-account rotation are blocked so settlement prefunds cannot be redirected before reserve accounting is booked. Rescue of unrelated tokens remains available.
