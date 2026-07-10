@@ -116,6 +116,7 @@ contract SmartAccountWrapper is
 
     function setSmartAccount(address smartAccount_) public onlyOwner {
         if (smartAccount_ == address(0)) revert SA__ZeroAddress();
+        if (frozenEpochId() != 0) revert SA__FrozenEpochPending();
         _getSmartAccountWrapperStorage().smartAccount = smartAccount_;
         emit SmartAccountSet(smartAccount_);
     }
@@ -135,6 +136,7 @@ contract SmartAccountWrapper is
 
     function rescue(address token, uint256 amount) external onlyOwner {
         if (token == asset()) {
+            if (frozenEpochId() != 0) revert SA__FrozenEpochPending();
             if (amount > assetSurplus()) revert SA__InsufficientSettlementAssets();
             IERC20(token).safeTransfer(smartAccount(), amount);
             return;

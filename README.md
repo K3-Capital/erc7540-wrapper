@@ -125,5 +125,6 @@ Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` 
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
 - Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`.
 - Owner, beacon, and smart-account privileges are high-trust controls.
+- While an epoch is frozen, underlying-asset rescue and smart-account rotation are blocked so settlement prefunds cannot be redirected before reserve accounting is booked. Rescue of unrelated tokens remains available.
 - Pause blocks new `requestDeposit` and `requestRedeem` calls only. The configured smart account may still close/settle epochs, and users/operators may still claim already-settled shares/assets; `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` continue to report claimable amounts while paused.
 - Major accounting/control-flow changes require a fresh audit before production use.

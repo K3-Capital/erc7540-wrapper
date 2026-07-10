@@ -871,6 +871,52 @@ contract EpochStagedERC7540Test is Test {
         assertEq(asset.balanceOf(safe), safeBefore + 7 * ONE, "asset surplus belongs to the Safe");
     }
 
+    function test_rescueUnderlyingAssetRevertsWhileEpochFrozen() public {
+        _requestDeposit(alice, 100 * ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100 * ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(80 * ONE, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.prank(safe);
+        assertTrue(asset.transfer(address(vault), 80 * ONE));
+
+        vm.expectRevert(EpochStagedERC7540Vault.SA__FrozenEpochPending.selector);
+        vault.rescue(address(asset), 80 * ONE);
+
+        _settle(2, 100 * ONE, 0);
+        assertEq(vault.maxRedeem(alice), 80 * ONE, "prefund remains available for settlement");
+    }
+
+    function test_rescueUnrelatedTokenStillAllowedWhileEpochFrozen() public {
+        ERC20Mock otherToken = new ERC20Mock();
+        otherToken.mint(address(vault), 7 * ONE);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vault.rescue(address(otherToken), 7 * ONE);
+
+        assertEq(otherToken.balanceOf(address(this)), 7 * ONE, "owner can rescue unrelated tokens while frozen");
+    }
+
+    function test_setSmartAccountRevertsWhileEpochFrozen() public {
+        address newSafe = makeAddr("newSafe");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        vm.expectRevert(EpochStagedERC7540Vault.SA__FrozenEpochPending.selector);
+        vault.setSmartAccount(newSafe);
+
+        assertEq(vault.smartAccount(), safe, "settlement authority unchanged while frozen");
+    }
+
     function test_rescueStagedTokenOnlyAllowsUnrelatedTokens() public {
         ERC20Mock otherToken = new ERC20Mock();
         otherToken.mint(vault.staging(), 7 * ONE);
