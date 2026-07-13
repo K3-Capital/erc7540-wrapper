@@ -119,12 +119,31 @@ Copy `.env.example` to `.env` and fill in values for the target chain. At minimu
 
 Request helper scripts require `REQUEST_OWNER_WALLET_ACCOUNT` / `REQUEST_OWNER` and optionally `REQUEST_CONTROLLER` so deposits/redeems are broadcast by the account that owns the assets/shares or an explicitly configured operator path.
 
+## Authorization controls
+
+ERC-7540 separates the account that owns assets/shares (`owner`), the account that controls the pending request and later claim (`controller`), and the caller submitting the transaction. Operator approvals are scoped to a controller via `setOperator(operator, approved)`; they are not transitive across unrelated controllers.
+
+Request authorization follows these rules:
+
+| Flow | Allowed controller routing |
+|---|---|
+| `requestDeposit(assets, controller, owner)` with `msg.sender == owner` | The owner may deposit into `controller == owner`, or into a different `controller` only if that controller approved the owner/caller as operator. |
+| `requestDeposit(assets, controller, owner)` with `msg.sender != owner` | The caller must be an operator for `owner`, and the request must use `controller == owner`. The operator cannot pull the owner's assets into another controller bucket. |
+| `requestRedeem(shares, controller, owner)` with `msg.sender == owner` | The owner may redeem into `controller == owner`, or into a different `controller` only if that controller approved the owner/caller as operator. |
+| `requestRedeem(shares, controller, owner)` with `msg.sender != owner` | The request must use `controller == owner`. The caller must either be an operator for `owner` or spend ERC-20 share allowance from `owner`; neither path can redirect the pending redeem claim to another controller. |
+
+The ERC-20 share-allowance branch for `requestRedeem` is preserved for ERC-7540 compatibility. ERC-7540 describes redeem-request approval for `msg.sender != owner` as coming either from ERC-20 approval over the owner's shares or from owner/controller operator approval. Removing the allowance path would make integrations that use ordinary ERC-20 share approvals unable to request asynchronous redeems on behalf of the owner; they would need users to call `setOperator` instead.
+
+Claim authorization is controller-scoped: `deposit`, `mint`, `withdraw`, and `redeem` claims with a `controller` parameter may be called only by the controller itself or by an operator approved by that controller. The caller may choose any output `receiver`, but only after satisfying that controller authorization.
+
+These rules intentionally avoid inferring owner consent from two independent approvals. For example, if an owner approves an operator and an unrelated controller also approves the same operator, the operator still cannot pull the owner's assets/shares into that unrelated controller's request bucket. Supporting third-party owner-funded requests to another controller would require a separate explicit authorization that names both the owner and the destination controller.
+
 ## Security notes
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
 - The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
 - Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`. In extreme dust cases, a non-final claim can round to zero output; claiming it intentionally burns/consumes that dust claim and advances the controller's epoch queue.
-- Share allowance for `requestRedeem` authorizes the caller to lock the owner's shares into the caller-selected controller bucket. The controller, or one of its approved ERC-7540 operators, controls the later claim and receiver choice.
+- Share allowance for `requestRedeem` authorizes a non-owner caller to lock the owner's shares into the owner's own controller bucket only. It does not authorize redirecting the pending redeem claim to a different controller.
 - Owner, beacon, and smart-account privileges are high-trust controls.
 - While an epoch is frozen, underlying-asset rescue and smart-account rotation are blocked so settlement prefunds cannot be redirected before reserve accounting is booked. Rescue of unrelated tokens remains available.
 - Pause blocks new `requestDeposit` and `requestRedeem` calls only. The configured smart account may still close/settle epochs, and users/operators may still claim already-settled shares/assets; `maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` continue to report claimable amounts while paused.

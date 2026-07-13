@@ -17,7 +17,7 @@
 8. [Settlement Flow](#8-settlement-flow)
 9. [Claim Flow](#9-claim-flow)
 10. [ERC-7540 / ERC-4626 API Compatibility](#10-erc-7540--erc-4626-api-compatibility)
-11. [Operator System](#11-operator-system)
+11. [Authorization Controls & Operator System](#11-authorization-controls--operator-system)
 12. [Asset Movement](#12-asset-movement)
 13. [Key Invariants](#13-key-invariants)
 14. [Known Tradeoffs & Assumptions](#14-known-tradeoffs--assumptions)
@@ -587,36 +587,49 @@ Because `share() == address(this)`, the wrapper is also its own ERC-7575 share t
 
 ---
 
-## 11. Operator System
+## 11. Authorization Controls & Operator System
 
-Operators are approved per controller.
+ERC-7540 requests carry three separate authorization concepts:
 
-### Request authorization
+- **`owner`**: the account whose underlying assets are pulled for deposits, or whose vault shares are locked for redemptions.
+- **`controller`**: the account that owns the pending request bucket and controls the later claim.
+- **`msg.sender` / caller**: the account submitting the request or claim transaction.
 
-`requestDeposit(assets, controller, owner)`:
+Operators are approved per controller with `setOperator(operator, approved)`. The approval means "this operator may act on behalf of this controller's request/claim lane." It does **not** mean "this controller may receive assets or shares funded by every owner that also approved the same operator." Operator approvals are intentionally non-transitive across controllers.
 
-- authorization is about transferring `owner`'s underlying assets,
-- `owner == msg.sender` or `owner` has approved `msg.sender` according to the implementation's operator/allowance rules,
-- ERC-20 allowance from `owner` to the vault/staging path is required for asset transfer.
+### Request authorization matrix
 
-`requestRedeem(shares, controller, owner)`:
+`requestDeposit(assets, controller, owner)` authorizes movement of `owner`'s underlying assets and records a pending deposit request for `controller`.
 
-- authorization is about taking/locking `owner`'s vault shares,
-- if `msg.sender == owner`, no additional share authorization is needed,
-- if `msg.sender != owner` and `controller == owner` and `owner` approved `msg.sender` as an ERC-7540 operator, the request is allowed without consuming ERC-20 share allowance,
-- otherwise the call must spend ERC-20 share allowance from `owner` to `msg.sender`,
-- this request-time share authorization is separate from controller claim authorization. The operator no-allowance path is intentionally limited to `controller == owner` so an operator cannot redirect the owner's shares into an unrelated controller bucket.
+| Caller relation | Required authorization | Allowed controller |
+|---|---|---|
+| `msg.sender == owner` | ERC-20 asset allowance from `owner` to the vault; no owner-operator approval is needed because the owner is calling directly. | `controller == owner`, or `controller != owner` only when `controller` approved the owner/caller as operator. |
+| `msg.sender != owner` | `owner` approved `msg.sender` as ERC-7540 operator, plus ERC-20 asset allowance from `owner` to the vault. | Must be `controller == owner`. The operator cannot route the owner's assets into another controller bucket. |
 
-When the fallback ERC-20 share allowance path is used, the allowance spender can choose the request's `controller` bucket. That is equivalent to the owner allowing the spender to move the owner's vault shares, and the chosen controller, or one of that controller's approved ERC-7540 operators, controls the later claim and receiver choice. Integrators should prefer the ERC-7540 operator path for delegated requests that must keep `controller == owner`, and users should only grant share allowance to callers they trust to choose the intended controller.
+`requestRedeem(shares, controller, owner)` authorizes movement of `owner`'s vault shares and records a pending redeem request for `controller`.
+
+| Caller relation | Required authorization | Allowed controller |
+|---|---|---|
+| `msg.sender == owner` | No ERC-20 share allowance is needed because the owner is moving its own shares. | `controller == owner`, or `controller != owner` only when `controller` approved the owner/caller as operator. |
+| `msg.sender != owner` and `owner` approved caller as ERC-7540 operator | Owner-operator approval. No ERC-20 share allowance is spent. | Must be `controller == owner`. |
+| `msg.sender != owner` without owner-operator approval | ERC-20 share allowance from `owner` to `msg.sender` is spent. | Must be `controller == owner`. Share allowance authorizes moving the owner's shares, but not redirecting the pending redeem claim to another controller. |
+
+The ERC-20 share-allowance branch is intentionally kept for ERC-7540 compatibility. The standard describes redeem-request approval for a caller other than `owner` as coming either from ERC-20 approval over the owner's shares or from the owner approving the caller as an operator, with operator spenders not subject to allowance restrictions and finite ERC-20 approvals being deducted. Removing this branch would make the vault stricter and simpler, but ordinary ERC-20 approved spenders, routers, and adapters could no longer submit asynchronous redeem requests for `controller == owner`; users would have to grant ERC-7540 operator approval instead.
+
+The invariant is the same for deposits and redemptions: **a non-owner caller cannot create an owner-funded/owner-share request for a different controller**. The only supported split-controller request path is self-funded/self-share movement by the owner, and the destination controller must explicitly approve the owner/caller.
+
+This avoids inferring owner consent from independent approvals. If Alice approves Router as an operator, and Mallory's controller also approves Router, Router still cannot pull Alice's assets or shares into Mallory's controller bucket. Alice's approval only authorizes Router to act within Alice's own controller lane. Mallory's approval only authorizes Router to act within Mallory's lane; it does not prove Alice intended Mallory to receive the request claim.
+
+If a future product needs third-party owner-funded deposits or redemptions to another controller, that should be a separate explicit authorization surface, such as a signed request or permit-like approval that names the owner, destination controller, asset/share amount, and deadline. It should not be inferred from two unrelated `setOperator` approvals.
 
 ### Claim authorization
 
-`deposit`, `mint`, `redeem`, and `withdraw` with a `controller` parameter:
+`deposit`, `mint`, `redeem`, and `withdraw` with a `controller` parameter consume claimable requests already owned by `controller`. They may be called only by:
 
-- `controller == msg.sender`, or
-- `controller` approved `msg.sender` as an operator.
+- `controller`, or
+- an operator approved by `controller`.
 
-Claims can send output to an arbitrary `receiver`, but only the controller or its approved operator can consume the controller's claimable request.
+Claims can send output to an arbitrary `receiver`, but only the controller or its approved operator can consume the controller's claimable request. This is separate from request-time owner authorization: request-time authorization decides who may stage assets/shares and which controller receives the pending bucket; claim-time authorization decides who may consume that controller's settled bucket and choose the output receiver.
 
 ---
 

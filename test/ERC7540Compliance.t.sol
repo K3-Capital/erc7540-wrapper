@@ -122,6 +122,141 @@ contract ERC7540ComplianceTest is Test {
         assertEq(asset.balanceOf(operator), 0);
     }
 
+    function test_ownerAuthorizedOperatorCanFundDepositRequestForOwner() public {
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.setOperator(operator, true);
+        vm.stopPrank();
+
+        vm.prank(operator);
+        uint256 requestId = vault.requestDeposit(100e18, user, user);
+
+        assertEq(requestId, 1);
+        assertEq(vault.pendingDepositRequest(requestId, user), 100e18);
+        assertEq(asset.balanceOf(user), 1_000_000e18 - 100e18);
+    }
+
+    function test_ownerOperatorCannotRedirectDepositToDifferentController() public {
+        address controller = makeAddr("controller");
+
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.setOperator(operator, true);
+        vm.stopPrank();
+        vm.prank(controller);
+        vault.setOperator(operator, true);
+
+        vm.prank(operator);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestDeposit(100e18, controller, user);
+
+        assertEq(vault.pendingDepositRequest(1, controller), 0);
+        assertEq(asset.balanceOf(user), 1_000_000e18);
+    }
+
+    function test_shareAllowanceSpenderCanRequestRedeemForOwnerController() public {
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.requestDeposit(100e18, user, user);
+        vm.stopPrank();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        vm.prank(safe);
+        vault.settleEpoch(1, 0);
+
+        vm.prank(user);
+        vault.deposit(100e18, user, user);
+        vm.prank(user);
+        vault.approve(operator, 25e18);
+
+        vm.prank(operator);
+        uint256 requestId = vault.requestRedeem(25e18, user, user);
+
+        assertEq(requestId, 2);
+        assertEq(vault.pendingRedeemRequest(requestId, user), 25e18);
+        assertEq(vault.allowance(user, operator), 0);
+    }
+
+    function test_shareAllowanceSpenderCannotRedirectRedeemToDifferentController() public {
+        address controller = makeAddr("controller");
+
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.requestDeposit(100e18, user, user);
+        vm.stopPrank();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        vm.prank(safe);
+        vault.settleEpoch(1, 0);
+
+        vm.prank(user);
+        vault.deposit(100e18, user, user);
+        vm.prank(user);
+        vault.approve(operator, 25e18);
+        vm.prank(controller);
+        vault.setOperator(operator, true);
+
+        vm.prank(operator);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestRedeem(25e18, controller, user);
+
+        assertEq(vault.pendingRedeemRequest(2, controller), 0);
+        assertEq(vault.balanceOf(user), 100e18);
+        assertEq(vault.allowance(user, operator), 25e18);
+    }
+
+    function test_ownerCanAssignRedeemRequestToApprovedController() public {
+        address controller = makeAddr("controller");
+
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.requestDeposit(100e18, user, user);
+        vm.stopPrank();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        vm.prank(safe);
+        vault.settleEpoch(1, 0);
+
+        vm.prank(user);
+        vault.deposit(100e18, user, user);
+        vm.prank(controller);
+        vault.setOperator(user, true);
+
+        vm.prank(user);
+        uint256 requestId = vault.requestRedeem(25e18, controller, user);
+
+        assertEq(requestId, 2);
+        assertEq(vault.pendingRedeemRequest(requestId, controller), 25e18);
+        assertEq(vault.balanceOf(user), 75e18);
+    }
+
+    function test_ownerCannotAssignRedeemRequestToUnapprovedController() public {
+        address controller = makeAddr("controller");
+
+        vm.startPrank(user);
+        asset.approve(address(vault), 100e18);
+        vault.requestDeposit(100e18, user, user);
+        vm.stopPrank();
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        vm.prank(safe);
+        vault.settleEpoch(1, 0);
+
+        vm.prank(user);
+        vault.deposit(100e18, user, user);
+
+        vm.prank(user);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__NotAuthorized.selector);
+        vault.requestRedeem(25e18, controller, user);
+
+        assertEq(vault.pendingRedeemRequest(2, controller), 0);
+        assertEq(vault.balanceOf(user), 100e18);
+    }
+
     function test_previewFunctionsRevert() public {
         vm.expectRevert(EpochStagedERC7540Vault.SA__AsyncOnly.selector);
         vault.previewDeposit(1);
