@@ -880,6 +880,56 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxRedeem(carol), 0, "final redeem queue advances");
     }
 
+    function test_mintRevertsWhenPartialOutputConsumesAllRemainingAssets() public {
+        _requestDeposit(alice, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 3);
+
+        _requestDeposit(bob, 2);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 2, 0);
+
+        vm.prank(bob);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__PartialClaimConsumesAllInput.selector);
+        vault.mint(2, bob, bob);
+
+        assertEq(vault.maxDeposit(bob), 2, "rejected partial mint leaves asset claim intact");
+        assertEq(vault.maxMint(bob), 3, "rejected partial mint leaves share claim intact");
+        vm.prank(bob);
+        assertEq(vault.mint(3, bob, bob), 2, "full mint consumes the complete claim");
+        assertEq(vault.balanceOf(vault.staging()), 0, "no minted shares remain stranded");
+        assertEq(vault.maxDeposit(bob), 0, "full mint advances the deposit queue");
+    }
+
+    function test_withdrawRevertsWhenPartialOutputConsumesAllRemainingShares() public {
+        _requestDeposit(alice, 3);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 3);
+
+        vm.prank(alice);
+        vault.requestRedeem(3, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, 100, 100);
+
+        vm.prank(alice);
+        vm.expectRevert(EpochStagedERC7540Vault.SA__PartialClaimConsumesAllInput.selector);
+        vault.withdraw(99, alice, alice);
+
+        assertEq(vault.maxRedeem(alice), 3, "rejected partial withdraw leaves share claim intact");
+        assertEq(vault.maxWithdraw(alice), 100, "rejected partial withdraw leaves asset claim intact");
+        vm.prank(alice);
+        assertEq(vault.withdraw(100, alice, alice), 3, "full withdraw consumes the complete claim");
+        assertEq(asset.balanceOf(vault.staging()), 0, "no reserved assets remain stranded");
+        assertEq(vault.redeemClaimReserves(), 0, "redeem reserve accounting clears");
+        assertEq(vault.maxRedeem(alice), 0, "full withdraw advances the redeem queue");
+    }
+
     function test_assetDonationsDoNotChangeEpochPricing() public {
         asset.mint(address(this), 1_000 * ONE);
         assertTrue(asset.transfer(address(vault), 10 * ONE));

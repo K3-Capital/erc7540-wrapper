@@ -84,6 +84,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
     error SA__InsufficientSettlementAssets();
     error SA__NoClaimableEpoch();
     error SA__ExceedsClaimable(uint256 requested, uint256 claimable);
+    error SA__PartialClaimConsumesAllInput();
     error SA__ZeroAmount();
     error SA__InvalidNavSnapshot();
     error SA__InvalidRequestId(uint256 requestId);
@@ -494,9 +495,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
     {
         if (shares == 0) revert SA__ZeroAmount();
         if (shares > remainingShares) revert SA__ExceedsClaimable(shares, remainingShares);
-        return shares == remainingShares
+        uint256 assets = shares == remainingShares
             ? remainingAssets
             : shares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Ceil);
+        if (assets == remainingAssets && shares != remainingShares) revert SA__PartialClaimConsumesAllInput();
+        return assets;
     }
 
     function _consumeDepositClaim(
@@ -566,9 +569,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
     {
         if (assets == 0) revert SA__ZeroAmount();
         if (assets > remainingAssets) revert SA__ExceedsClaimable(assets, remainingAssets);
-        return assets == remainingAssets
+        uint256 shares = assets == remainingAssets
             ? remainingShares
             : assets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Ceil);
+        if (shares == remainingShares && assets != remainingAssets) revert SA__PartialClaimConsumesAllInput();
+        return shares;
     }
 
     function _assetsForRedeemClaim(uint256 shares, uint256 remainingAssets, uint256 remainingShares)
