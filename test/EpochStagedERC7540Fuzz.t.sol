@@ -57,6 +57,61 @@ contract EpochStagedERC7540FuzzTest is Test {
         vault.deposit(initialAssets, alice, alice);
     }
 
+    function _claimDepositByMint(address controller, uint256 splitSeed) internal returns (uint256 assetsClaimed) {
+        uint256 remainingAssets = vault.maxDeposit(controller);
+        uint256 remainingShares = vault.maxMint(controller);
+
+        if (remainingShares > 1) {
+            uint256 partialShares = bound(splitSeed, 1, remainingShares - 1);
+            uint256 partialAssets = partialShares.mulDiv(remainingAssets, remainingShares, Math.Rounding.Ceil);
+            // Production rejects a partial exact-output claim if ceil rounding would consume all paired assets.
+            if (partialAssets < remainingAssets) {
+                vm.prank(controller);
+                assetsClaimed = vault.mint(partialShares, controller, controller);
+                assertEq(assetsClaimed, partialAssets, "partial mint charges the rounded-up asset amount");
+                assertEq(vault.maxDeposit(controller), remainingAssets - partialAssets, "mint clears paired assets");
+                assertEq(vault.maxMint(controller), remainingShares - partialShares, "mint clears paired shares");
+            }
+        }
+
+        uint256 finalShares = vault.maxMint(controller);
+        vm.prank(controller);
+        uint256 finalAssets = vault.mint(finalShares, controller, controller);
+        assetsClaimed += finalAssets;
+        assertEq(vault.maxDeposit(controller), 0, "full mint advances and clears the asset queue");
+        assertEq(vault.maxMint(controller), 0, "full mint advances and clears the share queue");
+    }
+
+    function _claimRedeemByWithdraw(address controller, uint256 splitSeed) internal returns (uint256 assetsClaimed) {
+        uint256 remainingAssets = vault.maxWithdraw(controller);
+        uint256 remainingShares = vault.maxRedeem(controller);
+
+        if (remainingAssets > 1) {
+            uint256 partialAssets = bound(splitSeed, 1, remainingAssets - 1);
+            uint256 partialShares = partialAssets.mulDiv(remainingShares, remainingAssets, Math.Rounding.Ceil);
+            // Production rejects a partial exact-output claim if ceil rounding would consume all paired shares.
+            if (partialShares < remainingShares) {
+                vm.prank(controller);
+                uint256 sharesClaimed = vault.withdraw(partialAssets, controller, controller);
+                assetsClaimed = partialAssets;
+                assertEq(sharesClaimed, partialShares, "partial withdraw charges the rounded-up share amount");
+                assertEq(
+                    vault.maxWithdraw(controller), remainingAssets - partialAssets, "withdraw clears paired assets"
+                );
+                assertEq(vault.maxRedeem(controller), remainingShares - partialShares, "withdraw clears paired shares");
+            }
+        }
+
+        uint256 finalAssets = vault.maxWithdraw(controller);
+        uint256 finalShares = vault.maxRedeem(controller);
+        vm.prank(controller);
+        uint256 finalSharesClaimed = vault.withdraw(finalAssets, controller, controller);
+        assetsClaimed += finalAssets;
+        assertEq(finalSharesClaimed, finalShares, "final withdraw consumes all paired shares");
+        assertEq(vault.maxWithdraw(controller), 0, "full withdraw advances and clears the asset queue");
+        assertEq(vault.maxRedeem(controller), 0, "full withdraw advances and clears the share queue");
+    }
+
     function testFuzz_depositSettlementUsesFloorPricePerShare(
         uint128 initialSupply_,
         uint128 navSnapshot_,
@@ -228,5 +283,91 @@ contract EpochStagedERC7540FuzzTest is Test {
         assertEq(vault.balanceOf(alice), initialSupply + aliceShares, "alice gets floor allocation");
         assertEq(vault.balanceOf(bob), bobShares, "bob gets remaining share allocation");
         assertEq(vault.balanceOf(vault.staging()), 0, "no share dust remains in staging");
+    }
+
+    function testFuzz_exactOutputMintClearsPairedClaimsInEitherControllerOrder(
+        uint128 initialSupply_,
+        uint128 navSnapshot_,
+        uint128 bobAssets_,
+        uint128 carolAssets_,
+        uint128 firstSplitSeed,
+        uint128 secondSplitSeed,
+        bool bobClaimsFirst
+    ) public {
+        uint256 initialSupply = bound(uint256(initialSupply_), 2, MAX_AMOUNT / 1e12);
+        uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
+        uint256 bobAssets = bound(uint256(bobAssets_), 1, MAX_AMOUNT / 1e12);
+        uint256 carolAssets = bound(uint256(carolAssets_), 1, MAX_AMOUNT / 1e12);
+        uint256 settlementShares = (bobAssets + carolAssets).mulDiv(initialSupply, navSnapshot, Math.Rounding.Floor);
+        vm.assume(settlementShares >= 2);
+
+        _seedVault(initialSupply);
+        _requestDeposit(bob, bobAssets);
+        _requestDeposit(carol, carolAssets);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, navSnapshot, 0);
+
+        address first = bobClaimsFirst ? bob : carol;
+        address second = bobClaimsFirst ? carol : bob;
+        vm.assume(vault.maxMint(first) > 0 && vault.maxMint(second) > 0);
+
+        uint256 firstAssetsClaimed = _claimDepositByMint(first, firstSplitSeed);
+        assertEq(vault.claimableDepositRequest(2, first), 0, "first controller's epoch claim is fully consumed");
+        uint256 secondAssetsClaimed = _claimDepositByMint(second, secondSplitSeed);
+        assertEq(vault.claimableDepositRequest(2, second), 0, "second controller's epoch claim is fully consumed");
+
+        assertEq(firstAssetsClaimed + secondAssetsClaimed, bobAssets + carolAssets, "mint claims clear all assets");
+        assertEq(vault.balanceOf(bob) + vault.balanceOf(carol), settlementShares, "mint claims clear all shares");
+        assertEq(vault.balanceOf(vault.staging()), 0, "no paired shares remain in staging");
+    }
+
+    function testFuzz_exactOutputWithdrawClearsPairedClaimsAndReservesInEitherControllerOrder(
+        uint128 initialSupply_,
+        uint128 navSnapshot_,
+        uint128 bobShares_,
+        uint128 carolShares_,
+        uint128 firstSplitSeed,
+        uint128 secondSplitSeed,
+        bool bobClaimsFirst
+    ) public {
+        uint256 initialSupply = bound(uint256(initialSupply_), 2, MAX_AMOUNT / 1e12);
+        uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
+        uint256 bobShares = bound(uint256(bobShares_), 1, initialSupply - 1);
+        uint256 carolShares = bound(uint256(carolShares_), 1, initialSupply - bobShares);
+        uint256 reservedAssets = (bobShares + carolShares).mulDiv(navSnapshot, initialSupply, Math.Rounding.Floor);
+        vm.assume(reservedAssets >= 2);
+
+        _seedVault(initialSupply);
+        vm.startPrank(alice);
+        assertTrue(vault.transfer(bob, bobShares));
+        assertTrue(vault.transfer(carol, carolShares));
+        vm.stopPrank();
+        vm.prank(bob);
+        vault.requestRedeem(bobShares, bob, bob);
+        vm.prank(carol);
+        vault.requestRedeem(carolShares, carol, carol);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, navSnapshot, reservedAssets);
+
+        address first = bobClaimsFirst ? bob : carol;
+        address second = bobClaimsFirst ? carol : bob;
+        vm.assume(vault.maxWithdraw(first) > 0 && vault.maxWithdraw(second) > 0);
+
+        uint256 reserveBefore = vault.redeemClaimReserves();
+        uint256 firstAssetsClaimed = _claimRedeemByWithdraw(first, firstSplitSeed);
+        assertEq(vault.claimableRedeemRequest(2, first), 0, "first controller's epoch claim is fully consumed");
+        assertEq(
+            vault.redeemClaimReserves(),
+            reserveBefore - firstAssetsClaimed,
+            "first withdrawal releases its exact reserve"
+        );
+        uint256 secondAssetsClaimed = _claimRedeemByWithdraw(second, secondSplitSeed);
+        assertEq(vault.claimableRedeemRequest(2, second), 0, "second controller's epoch claim is fully consumed");
+
+        assertEq(firstAssetsClaimed + secondAssetsClaimed, reservedAssets, "withdrawals clear all reserved assets");
+        assertEq(vault.redeemClaimReserves(), 0, "no paired reserve remains after queue advancement");
+        assertEq(asset.balanceOf(vault.staging()), 0, "no paired assets remain in staging");
     }
 }
