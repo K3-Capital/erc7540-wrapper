@@ -502,7 +502,7 @@ For each settled epoch/controller, the implementation stores claimed counters on
 
 Claim-time rounding residuals are intentionally assigned to the final claimant for the epoch/side. For deposit claims, earlier controllers receive their floor share allocation and the controller whose claim consumes the last remaining deposit assets receives all remaining minted shares for that epoch. For redeem claims, earlier controllers receive their floor asset allocation and the controller whose claim consumes the last remaining redeem shares receives all remaining reserved assets for that epoch. This policy is claim-order dependent, but it avoids per-controller entitlement storage, preserves scalable lazy claims, and ensures final claims clear `Staging` share/asset dust and redeem reserve accounting.
 
-`maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` expose only the currently oldest claimable epoch for the controller. They do not aggregate across multiple claimable epochs because one claim call does not span epochs in v1. When claims are paused, these `max*` functions return zero.
+`maxDeposit`, `maxMint`, `maxWithdraw`, and `maxRedeem` expose only the currently oldest claimable epoch for the controller. They do not aggregate across multiple claimable epochs because one claim call does not span epochs in v1. Because pause is request-only, these `max*` functions continue to report the oldest claimable epoch while paused.
 
 `deposit(assets, receiver, controller)`:
 
