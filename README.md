@@ -141,7 +141,7 @@ These rules intentionally avoid inferring owner consent from two independent app
 ## Security notes
 
 - The smart account/Safe is trusted to provide correct NAV snapshots and settlement funding.
-- The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying.
+- The current accounting assumes a standard non-rebasing, no-transfer-fee ERC-20 underlying. A shared upgradeable reentrancy guard protects `requestDeposit`, `settleEpoch`, `withdraw`, and `redeem`, covering the entrypoints that measure or transfer the underlying around accounting state transitions.
 - Rounding dust follows the behavior documented in tests and architecture docs: per-epoch claim residuals are assigned to the final claimant for that epoch/side so no shares or assets remain stranded in `Staging`. In extreme dust cases, a non-final claim can round to zero output; claiming its entire remaining input intentionally burns/consumes that dust claim and advances the controller's epoch queue. Partial zero-output claims remain queued until their remaining input is consumed. `mint` and `withdraw` reject partial output claims when ceil rounding would consume the entire remaining input; callers must claim the complete remaining output instead.
 - Share allowance for `requestRedeem` authorizes a non-owner caller to lock the owner's shares into the owner's own controller bucket only. It does not authorize redirecting the pending redeem claim to a different controller.
 - Owner, beacon, and smart-account privileges are high-trust controls.

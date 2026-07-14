@@ -524,7 +524,12 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         emit Deposit(_msgSender(), receiver, assets, shares);
     }
 
-    function withdraw(uint256 assets, address receiver, address controller) public override returns (uint256 shares) {
+    function withdraw(uint256 assets, address receiver, address controller)
+        public
+        virtual
+        override
+        returns (uint256 shares)
+    {
         (EpochStagedERC7540VaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
             _loadRedeemClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
@@ -532,7 +537,12 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         _consumeRedeemClaim($, epochId, controller, claim, receiver, assets, shares);
     }
 
-    function redeem(uint256 shares, address receiver, address controller) public override returns (uint256 assets) {
+    function redeem(uint256 shares, address receiver, address controller)
+        public
+        virtual
+        override
+        returns (uint256 assets)
+    {
         (EpochStagedERC7540VaultStorage storage $, uint40 epochId, RedeemClaimData storage claim) =
             _loadRedeemClaim(controller);
         (uint256 remainingAssets, uint256 remainingShares) = _redeemClaimRemaining($, epochId, controller, claim);
