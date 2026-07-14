@@ -5,6 +5,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC7540, IERC7540Deposit, IERC7540Redeem, IERC7540Operator} from "forge-std/interfaces/IERC7540.sol";
@@ -18,6 +19,7 @@ contract SmartAccountWrapper is
     Ownable2StepUpgradeable,
     AccessControlUpgradeable,
     PausableUpgradeable,
+    ReentrancyGuardUpgradeable,
     EpochStagedERC7540Vault
 {
     using SafeERC20 for IERC20;
@@ -72,6 +74,7 @@ contract SmartAccountWrapper is
         __Ownable_init(owner_);
         __AccessControl_init();
         __Pausable_init();
+        __ReentrancyGuard_init();
         __ERC20_init_unchained(name_, symbol_);
         __ERC4626_init_unchained(IERC20(underlyingToken_));
         __EpochStagedERC7540Vault_init();
@@ -83,6 +86,7 @@ contract SmartAccountWrapper is
         public
         override
         whenNotPaused
+        nonReentrant
         returns (uint256 requestId)
     {
         return super.requestDeposit(assets, controller, owner);
@@ -101,8 +105,26 @@ contract SmartAccountWrapper is
         return super.closeEpoch();
     }
 
-    function settleEpoch(uint40 epochId, uint256 navSnapshot) public override onlySmartAccount {
+    function settleEpoch(uint40 epochId, uint256 navSnapshot) public override onlySmartAccount nonReentrant {
         super.settleEpoch(epochId, navSnapshot);
+    }
+
+    function withdraw(uint256 assets, address receiver, address controller)
+        public
+        override
+        nonReentrant
+        returns (uint256 shares)
+    {
+        return super.withdraw(assets, receiver, controller);
+    }
+
+    function redeem(uint256 shares, address receiver, address controller)
+        public
+        override
+        nonReentrant
+        returns (uint256 assets)
+    {
+        return super.redeem(shares, receiver, controller);
     }
 
     function pause() public {
