@@ -21,6 +21,8 @@ The current epoch-staged implementation is deployed and smoke-tested on Ethereum
 
 The wrapper proxy is the canonical integration address. See the [`deployments/`](deployments/README.md) registry for the implementation, beacon, `Staging`, owner and smart-account configuration, all six deployment receipts, compiler settings, runtime-bytecode hashes, proxy-slot checks, authorization simulations, and mainnet smoke-test evidence.
 
+At the recorded post-smoke snapshot, the beacon/wrapper owner is an EOA with no on-chain multisig or timelock, while the settlement smart account is an EIP-7702 delegated EOA. These are material trust assumptions; see the deployment verification report before integrating.
+
 Older addresses that previously appeared in this README were deployed from an earlier implementation and must not be treated as instances of the current contracts.
 
 Before publishing an additional deployment address, verify that:

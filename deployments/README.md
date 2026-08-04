@@ -11,11 +11,12 @@ deployments/<chain-id>/<wrapper-address>/
 Each deployment directory contains:
 
 - `deployment.json` — machine-readable addresses, source provenance, transaction receipts, compiler settings, and verification evidence;
-- `verification.md` — human-readable deployment, proxy, bytecode, configuration, authorization, and smoke-test report.
+- `verification.md` — human-readable deployment, proxy, bytecode, configuration, authorization, and smoke-test report; and
+- `smoke-test.json` — immutable transaction-by-transaction evidence for the production smoke test.
 
 When an implementation is upgraded, add append-only records under an `upgrades/` subdirectory.
 
-The exact timestamped Foundry broadcast artifact may also be retained under `broadcast/` as supporting evidence. Timestamped artifacts are immutable; mutable `run-latest.json` aliases, local-chain broadcasts, and dry runs are ignored.
+The exact timestamped Foundry broadcast artifact may also be retained under `broadcast/` as supporting evidence. It is not automatically authoritative: any known generator defect must be recorded in the deployment manifest and verification report. Timestamped artifacts are immutable; mutable `run-latest.json` aliases, local-chain broadcasts, and dry runs are ignored.
 
 ## Published deployments
 

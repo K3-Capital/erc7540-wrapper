@@ -34,28 +34,7 @@ jobs:
           forge --version
 
       - name: Validate deployment manifests
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          manifests = sorted(Path("deployments").glob("**/deployment.json"))
-          if not manifests:
-              raise SystemExit("no deployment manifests found")
-          for manifest in manifests:
-              with manifest.open(encoding="utf-8") as handle:
-                  data = json.load(handle)
-              chain_id = data["network"]["chainId"]
-              wrapper = data["contracts"]["wrapperProxy"]["address"]
-              assert data["schemaVersion"] == 1, manifest
-              assert manifest.parent.parent.name == str(chain_id), manifest
-              assert manifest.parent.name.lower() == wrapper.lower(), manifest
-              transactions = data["deployment"]["transactions"]
-              hashes = [transaction["hash"] for transaction in transactions]
-              assert transactions and all(transaction["status"] == 1 for transaction in transactions), manifest
-              assert len(hashes) == len(set(hashes)), manifest
-              print(f"validated {manifest}")
-          PY
+        run: python3 deployments/validate.py
 
       - name: Run Forge fmt
         run: |

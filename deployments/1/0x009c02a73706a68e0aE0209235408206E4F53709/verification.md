@@ -21,6 +21,8 @@ This report records deployment provenance and observed behavior at explicit bloc
 | Solidity | `0.8.30+commit.73712a01` |
 | Optimizer | Enabled, 200 runs |
 | EVM version | `osaka` |
+| Effective metadata settings | `viaIR = false`, `bytecodeHash = ipfs`, CBOR metadata enabled, literal source content disabled |
+| Reproduction toolchain | Foundry `1.7.1` (`4072e48705af9d93e3c0f6e29e93b5e9a40caed8`) |
 
 ## Contracts and configuration
 
@@ -31,8 +33,8 @@ This report records deployment provenance and observed behavior at explicit bloc
 | Implementation | [`0xC768529098e20e089Efd28A32c6Afa1D569b831a`](https://etherscan.io/address/0xc768529098e20e089efd28a32c6afa1d569b831a#code) | `SmartAccountWrapper` |
 | Staging | [`0x21636C226e113d7Dd59dA2987eaA7dAbBE4159c7`](https://etherscan.io/address/0x21636c226e113d7dd59da2987eaa7dabbe4159c7#code) | Immutable vault is the wrapper proxy |
 | Underlying | [`0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`](https://etherscan.io/token/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf) | Coinbase Wrapped BTC (`cbBTC`), 8 decimals |
-| Owner/admin | [`0x349bB895dB64f74AB9788693a16Ee03776195504`](https://etherscan.io/address/0x349bb895db64f74ab9788693a16ee03776195504) | Wrapper owner, beacon owner, virtual `DEFAULT_ADMIN_ROLE` |
-| Smart account | [`0x034d1E094Efd47d4e738033d0157f31718820470`](https://etherscan.io/address/0x034d1e094efd47d4e738033d0157f31718820470) | Sole `closeEpoch` and `settleEpoch` authority |
+| Owner/admin | [`0x349bB895dB64f74AB9788693a16Ee03776195504`](https://etherscan.io/address/0x349bb895db64f74ab9788693a16ee03776195504) | EOA; wrapper owner, beacon owner, virtual `DEFAULT_ADMIN_ROLE` |
+| Smart account | [`0x034d1E094Efd47d4e738033d0157f31718820470`](https://etherscan.io/address/0x034d1e094efd47d4e738033d0157f31718820470) | EIP-7702 delegated EOA; sole `closeEpoch` and `settleEpoch` authority |
 
 Wrapper metadata:
 
@@ -47,7 +49,16 @@ All four project deployment contracts are published on Etherscan as exact source
 
 The CREATE3 deployment produced six mainnet transactions. Every receipt has `status = 1`.
 
-The exact generated [`run-1785834040477.json`](../../../broadcast/Deploy.s.sol/1/run-1785834040477.json) artifact is retained with SHA-256 `1eb5ecad499e10649040a7e8ac071605889f36aba1610433ba876f22009f0e88`. The sequence below is normalized from receipt block numbers and transaction indexes; consumers should not infer chronological order from the generated artifact's transaction-array order.
+The exact generated [`run-1785834040477.json`](../../../broadcast/Deploy.s.sol/1/run-1785834040477.json) artifact is retained with SHA-256 `1eb5ecad499e10649040a7e8ac071605889f36aba1610433ba876f22009f0e88` for forensic completeness, but it has a known integrity defect: four `transactions[].hash` values are associated with the wrong transaction payload objects. Its receipt array is valid; its per-object transaction hash fields are **not authoritative**.
+
+| Payload object | Incorrect artifact hash | Correct receipt/live hash |
+| --- | --- | --- |
+| Deploy implementation | `0x329350…ccb9` | `0xc4e8c7…b2f3f` |
+| Create beacon CREATE3 deployer | `0xc80393…2247` | `0x73c1d7…31c2` |
+| Deploy beacon | `0xc4e8c7…b2f3f` | `0x329350…ccb9` |
+| Deploy wrapper and initialize `Staging` | `0x73c1d7…31c2` | `0xc80393…2247` |
+
+The sequence below is normalized from live receipts by block number and transaction index. Use this table or `deployment.json`, not the raw artifact's `transactions[].hash` associations.
 
 | Sequence | Purpose | Transaction | Block |
 | ---: | --- | --- | ---: |
@@ -127,6 +138,25 @@ After deployment verification, the production flow was exercised with 14 success
 | `closeEpoch` | 3 |
 | `settleEpoch` | 3 |
 
+The complete immutable receipt/input record is in [`smoke-test.json`](smoke-test.json), SHA-256 `254571b22f0c3389f0f2604d4aadc4606aa19e82d6852be5a8f0e3708e2dbcd3`. Amounts and NAV snapshots are recorded in 8-decimal base units. The exact sequence was:
+
+| # | Block | Call and principal arguments | Sender | Transaction |
+| ---: | ---: | --- | --- | --- |
+| 1 | 25,680,569 | `requestDeposit(39883, testAccount, testAccount)` | Test account | [`0xf363…deb53`](https://etherscan.io/tx/0xf3631ae6c04810e5ba3fb27129c98953cc9c93dca7f834fe5f0b17e8eacdeb53) |
+| 2 | 25,681,887 | `closeEpoch()` | Smart account | [`0x67ab…af0e`](https://etherscan.io/tx/0x67abe8b0ddb7c31501a0d009b7510cd089c04725bdde025d7f2ecbc8dcebaf0e) |
+| 3 | 25,681,953 | `settleEpoch(1, 0)` | Smart account | [`0x32d5…dda4`](https://etherscan.io/tx/0x32d5ef1262ee349fd99003e3b3dc42e9da9122cceaa6dceb17c1b6694705dda4) |
+| 4 | 25,681,964 | `deposit(39883, testAccount, testAccount)` | Test account | [`0x4991…51ff`](https://etherscan.io/tx/0x4991ac06bb0d5526c69f7541e5309e0b9c8f7942b87bf6cd375ea90a830b51ff) |
+| 5 | 25,681,966 | `requestRedeem(20000, testAccount, testAccount)` | Test account | [`0xe605…714a`](https://etherscan.io/tx/0xe605f6b9e2d8112207eb09bdf8a634e6016f949e0476748c36eeffda5b84714a) |
+| 6 | 25,681,977 | `closeEpoch()` | Smart account | [`0xdde0…0961`](https://etherscan.io/tx/0xdde00161f6c375032dd9efcb5e9ca7b355feca77c07ec74bfaca941f8ace0961) |
+| 7 | 25,682,224 | `settleEpoch(2, 39883)` | Smart account | [`0xadfe…39ea`](https://etherscan.io/tx/0xadfea6eef6357220d3d759b1ab2237d56ab9ffb2cb821e91f43d4beef85339ea) |
+| 8 | 25,682,244 | `redeem(20000, testAccount, testAccount)` | Test account | [`0xc336…a289`](https://etherscan.io/tx/0xc3360a446dc82139b59e9e30562e78a2fac3bd84f3db791b6ad6bc74b018a289) |
+| 9 | 25,682,248 | `requestDeposit(20000, testAccount, testAccount)` | Test account | [`0x8333…c8b7`](https://etherscan.io/tx/0x83339702914d2c5d986a0e70b169871927d605a5386a7eab99a8209695e5c8b7) |
+| 10 | 25,682,251 | `requestRedeem(19883, testAccount, testAccount)` | Test account | [`0xaab2…201e`](https://etherscan.io/tx/0xaab210906d148f6d791b9ec1a458eb6cf721a5a008ab460b28f9b194c599201e) |
+| 11 | 25,682,272 | `closeEpoch()` | Smart account | [`0xfb04…8cf7`](https://etherscan.io/tx/0xfb042e2d79dfa0219be729389027729bff7395d62aba6b1239010046d54b8cf7) |
+| 12 | 25,682,288 | `settleEpoch(3, 19883)` | Smart account | [`0x492d…28ef`](https://etherscan.io/tx/0x492d6822eda6edf3e5902636ff8a944119bb694713114b3f71dd2d1e4cf528ef) |
+| 13 | 25,682,380 | `deposit(20000, testAccount, testAccount)` | Test account | [`0x3d58…3163`](https://etherscan.io/tx/0x3d58b8b2b01b39b5781873474cffdfdcd2883fe045dae2d666d3ac457b313163) |
+| 14 | 25,682,381 | `redeem(19883, testAccount, testAccount)` | Test account | [`0x4939…dbf0`](https://etherscan.io/tx/0x49395bb929ce8f5abe68a03e20c57189ee9f4441e7834bc9644c51229ee5dbf0) |
+
 The calls span blocks 25,680,569 through 25,682,381. User request/claim operations were submitted by the deployment test account, while the configured smart account submitted all six epoch-management calls.
 
 A coherent post-smoke snapshot was read at block [`25,682,656`](https://etherscan.io/block/25682656), timestamp `2026-08-04T16:09:47Z`:
@@ -142,7 +172,17 @@ A coherent post-smoke snapshot was read at block [`25,682,656`](https://ethersca
 - smart account is now an active EIP-7702 delegated account and successfully executed the six epoch calls
 - `Staging` remains bound to the wrapper
 
-The initial operational caveat—privileged addresses had not yet demonstrated control on mainnet—was therefore superseded by the funded/delegated account state and successful end-to-end transactions recorded above.
+The initial smart-account operational caveat was superseded by its EIP-7702 delegation and six successful epoch-management transactions. The owner was funded and active, but remained an EOA without an on-chain multisig or timelock; that trust assumption was not removed by the smoke test.
+
+## Privileged-account trust assumptions
+
+At snapshot block 25,682,656:
+
+- **Owner/admin:** `0x349b…5504` had nonce 2, a nonzero balance, and empty runtime code and was therefore an EOA. It directly controlled wrapper administration and beacon upgrades. There was no on-chain multisig threshold, timelock, or other contract-enforced upgrade policy at this address.
+- **Settlement smart account:** `0x034d…0470` had nonce 8 and the EIP-7702 delegation designator `0xef0100e6cae83bde06e4c305530e199d7217f42808555b`, and successfully executed all three closes and all three settlements.
+- **Delegation target:** [`0xe6Cae83BdE06E4c305530e199D7217f42808555B`](https://etherscan.io/address/0xe6cae83bde06e4c305530e199d7217f42808555b#code) is the exact-match-verified `Simple7702Account` implementation. Its 3,639-byte runtime hash was `0xcc7b633aef4b2543cb8f37522adf1a401f910f0f6b2430c1eecc11f401ccfcf3`. This is an external dependency; this deployment report does not establish its audit status.
+
+Loss or compromise of the owner can change the implementation and administrative configuration. Loss or compromise of the settlement smart account can control epoch timing and reported NAV snapshots. Integrators must evaluate both control planes, not only the vault bytecode.
 
 ## Ongoing verification
 
@@ -154,6 +194,9 @@ cast call 0x7b80bdb8F0777F52A6054A0E48AFc15200b780B8 "owner()(address)" --rpc-ur
 cast call 0x009c02a73706a68e0aE0209235408206E4F53709 "owner()(address)" --rpc-url "$RPC_URL"
 cast call 0x009c02a73706a68e0aE0209235408206E4F53709 "smartAccount()(address)" --rpc-url "$RPC_URL"
 cast call 0x009c02a73706a68e0aE0209235408206E4F53709 "asset()(address)" --rpc-url "$RPC_URL"
+cast code 0x349bB895dB64f74AB9788693a16Ee03776195504 --rpc-url "$RPC_URL"
+cast code 0x034d1E094Efd47d4e738033d0157f31718820470 --rpc-url "$RPC_URL"
+cast keccak "$(cast code 0xe6Cae83BdE06E4c305530e199D7217f42808555B --rpc-url "$RPC_URL")"
 ```
 
 Future beacon upgrades must be documented as append-only records alongside this deployment. Major accounting or control-flow changes require a fresh audit before production use.

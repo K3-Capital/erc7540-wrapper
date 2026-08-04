@@ -22,14 +22,51 @@
     "foundryBroadcast": {
       "fileName": "broadcast/Deploy.s.sol/1/run-1785834040477.json",
       "artifactCommit": "46abe42",
-      "sha256": "1eb5ecad499e10649040a7e8ac071605889f36aba1610433ba876f22009f0e88"
+      "sha256": "1eb5ecad499e10649040a7e8ac071605889f36aba1610433ba876f22009f0e88",
+      "integrityStatus": "known-hash-to-payload-misassociations",
+      "authoritativeFields": [
+        "receipts"
+      ],
+      "nonAuthoritativeFields": [
+        "transactions[].hash"
+      ],
+      "knownHashMisassociations": [
+        {
+          "payload": "deploy SmartAccountWrapper implementation",
+          "recordedHash": "0x3293507bc32e9d34b778432274de2e6d680b4cee20f899f88d805d380eabccb9",
+          "correctHash": "0xc4e8c72fb41d7580e8ddaf98a4f2bef082133d5c05168fd6c3468ca4b58b2f3f"
+        },
+        {
+          "payload": "create beacon CREATE3 deployer",
+          "recordedHash": "0xc80393c3a336cb351ed0899f82e303a6c5fde9156f6b8756a39b4a13f54c2247",
+          "correctHash": "0x73c1d7404790d876f44ce17886b573a425f598a48c1a8630329d396f645031c2"
+        },
+        {
+          "payload": "deploy UpgradeableBeacon",
+          "recordedHash": "0xc4e8c72fb41d7580e8ddaf98a4f2bef082133d5c05168fd6c3468ca4b58b2f3f",
+          "correctHash": "0x3293507bc32e9d34b778432274de2e6d680b4cee20f899f88d805d380eabccb9"
+        },
+        {
+          "payload": "deploy BeaconProxy and initialize Staging",
+          "recordedHash": "0x73c1d7404790d876f44ce17886b573a425f598a48c1a8630329d396f645031c2",
+          "correctHash": "0xc80393c3a336cb351ed0899f82e303a6c5fde9156f6b8756a39b4a13f54c2247"
+        }
+      ]
     },
     "compiler": {
       "name": "solc",
       "version": "0.8.30+commit.73712a01",
       "optimizerEnabled": true,
       "optimizerRuns": 200,
-      "evmVersion": "osaka"
+      "evmVersion": "osaka",
+      "viaIR": false,
+      "bytecodeHash": "ipfs",
+      "cborMetadata": true,
+      "useLiteralContent": false
+    },
+    "reproductionToolchain": {
+      "foundryVersion": "1.7.1",
+      "foundryCommit": "4072e48705af9d93e3c0f6e29e93b5e9a40caed8"
     }
   },
   "configuration": {
@@ -37,6 +74,42 @@
     "owner": "0x349bB895dB64f74AB9788693a16Ee03776195504",
     "smartAccount": "0x034d1E094Efd47d4e738033d0157f31718820470",
     "underlyingAsset": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
+  },
+  "privilegedAccounts": {
+    "snapshotBlock": 25682656,
+    "owner": {
+      "address": "0x349bB895dB64f74AB9788693a16Ee03776195504",
+      "accountType": "EOA",
+      "runtimeCode": "0x",
+      "runtimeBytecodeKeccak256": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+      "nonce": 2,
+      "balanceWei": "494724674950760",
+      "onchainMultisigOrTimelock": false,
+      "authorities": [
+        "wrapper ownership and administration",
+        "beacon implementation upgrades"
+      ]
+    },
+    "smartAccount": {
+      "address": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "accountType": "EIP-7702 delegated EOA",
+      "delegationCode": "0xef0100e6cae83bde06e4c305530e199d7217f42808555b",
+      "delegationCodeKeccak256": "0x7181cae9612f1e0b0f24eefb3490cc24c8e92494fca6a85e732dd24eb96f63d2",
+      "nonce": 8,
+      "balanceWei": "247170836362011",
+      "delegationTarget": {
+        "address": "0xe6Cae83BdE06E4c305530e199D7217f42808555B",
+        "contract": "Simple7702Account",
+        "runtimeBytes": 3639,
+        "runtimeBytecodeKeccak256": "0xcc7b633aef4b2543cb8f37522adf1a401f910f0f6b2430c1eecc11f401ccfcf3",
+        "sourceVerification": "Etherscan Exact Match",
+        "explorerUrl": "https://etherscan.io/address/0xe6cae83bde06e4c305530e199d7217f42808555b#code"
+      },
+      "authorities": [
+        "close epochs",
+        "settle epochs"
+      ]
+    }
   },
   "contracts": {
     "wrapperProxy": {
@@ -212,6 +285,8 @@
       "transactionCount": 14,
       "firstBlock": 25680569,
       "lastBlock": 25682381,
+      "evidenceFile": "smoke-test.json",
+      "evidenceSha256": "254571b22f0c3389f0f2604d4aadc4606aa19e82d6852be5a8f0e3708e2dbcd3",
       "operations": {
         "requestDeposit": 2,
         "deposit": 2,
@@ -225,6 +300,7 @@
   },
   "documentation": {
     "humanVerificationReport": "verification.md",
+    "smokeTestEvidence": "smoke-test.json",
     "registryIndex": "../../README.md"
   }
 }
