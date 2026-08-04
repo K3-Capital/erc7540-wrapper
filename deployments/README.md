@@ -28,6 +28,8 @@ The exact timestamped Foundry broadcast artifact may also be retained under `bro
 
 - Treat the wrapper proxy as the stable integration address.
 - Pin every deployment to a full Git commit, compiler configuration, and transaction set.
+- Set `source.foundryBroadcast.integrityStatus` to `valid` for a clean artifact, or to `known-hash-to-payload-misassociations` with a non-empty mapping list when that generator defect is present.
+- Keep broadcast paths repository-relative, verification/smoke evidence paths deployment-directory-relative, and the registry index path `deployments/`-relative. Absolute paths and `..` traversal are invalid.
 - Record all implementation, beacon, proxy, staging, asset, owner, and settlement-authority addresses.
 - Record live bytecode hashes and proxy slots at an explicit verification block.
 - Never overwrite history after an upgrade. Add an upgrade record and update the deployment status while preserving the original deployment data.

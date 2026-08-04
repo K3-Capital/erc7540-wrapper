@@ -301,6 +301,6 @@
   "documentation": {
     "humanVerificationReport": "verification.md",
     "smokeTestEvidence": "smoke-test.json",
-    "registryIndex": "../../README.md"
+    "registryIndex": "README.md"
   }
 }
