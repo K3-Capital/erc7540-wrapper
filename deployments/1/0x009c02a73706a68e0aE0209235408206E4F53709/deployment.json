@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "ethereum-1-k3-cbbtc-vault",
+  "status": "active",
+  "network": {
+    "name": "Ethereum Mainnet",
+    "chainId": 1,
+    "explorer": "https://etherscan.io"
+  },
+  "vault": {
+    "name": "K3 cbBTC Vault",
+    "symbol": "k3cbBTC",
+    "decimals": 8,
+    "architecture": "ERC-1967 BeaconProxy"
+  },
+  "source": {
+    "repository": "https://github.com/K3-Capital/erc7540-wrapper",
+    "commit": "46abe4206993dc5340e092e30e78a45caaf02357",
+    "commitUrl": "https://github.com/K3-Capital/erc7540-wrapper/commit/46abe4206993dc5340e092e30e78a45caaf02357",
+    "deploymentScript": "script/Deploy.s.sol:DeployAll",
+    "deploymentHelper": "script/utils/DeployHelper.sol:DeployHelper",
+    "foundryBroadcast": {
+      "fileName": "broadcast/Deploy.s.sol/1/run-1785834040477.json",
+      "artifactCommit": "46abe42",
+      "sha256": "1eb5ecad499e10649040a7e8ac071605889f36aba1610433ba876f22009f0e88"
+    },
+    "compiler": {
+      "name": "solc",
+      "version": "0.8.30+commit.73712a01",
+      "optimizerEnabled": true,
+      "optimizerRuns": 200,
+      "evmVersion": "osaka"
+    }
+  },
+  "configuration": {
+    "deployer": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+    "owner": "0x349bB895dB64f74AB9788693a16Ee03776195504",
+    "smartAccount": "0x034d1E094Efd47d4e738033d0157f31718820470",
+    "underlyingAsset": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
+  },
+  "contracts": {
+    "wrapperProxy": {
+      "address": "0x009c02a73706a68e0aE0209235408206E4F53709",
+      "contract": "BeaconProxy",
+      "explorerUrl": "https://etherscan.io/address/0x009c02a73706a68e0ae0209235408206e4f53709#code"
+    },
+    "beacon": {
+      "address": "0x7b80bdb8F0777F52A6054A0E48AFc15200b780B8",
+      "contract": "UpgradeableBeacon",
+      "explorerUrl": "https://etherscan.io/address/0x7b80bdb8f0777f52a6054a0e48afc15200b780b8#code"
+    },
+    "implementation": {
+      "address": "0xC768529098e20e089Efd28A32c6Afa1D569b831a",
+      "contract": "SmartAccountWrapper",
+      "explorerUrl": "https://etherscan.io/address/0xc768529098e20e089efd28a32c6afa1d569b831a#code"
+    },
+    "staging": {
+      "address": "0x21636C226e113d7Dd59dA2987eaA7dAbBE4159c7",
+      "contract": "Staging",
+      "explorerUrl": "https://etherscan.io/address/0x21636c226e113d7dd59da2987eaa7dabbe4159c7#code"
+    },
+    "underlyingAsset": {
+      "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+      "name": "Coinbase Wrapped BTC",
+      "symbol": "cbBTC",
+      "decimals": 8,
+      "explorerUrl": "https://etherscan.io/token/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf"
+    }
+  },
+  "deployment": {
+    "completedAt": "2026-08-04T09:00:35Z",
+    "firstBlock": 25680512,
+    "completionBlock": 25680513,
+    "completionBlockHash": "0xf33f06844c28c08976e22aa526908ac864be636db35916e4f48bdd362b940e96",
+    "canonicalCreate2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+    "create3": {
+      "derivedSalts": {
+        "implementation": "0xd01dfd2dffb3299755a11109df0ba6f394f5dc5bacded86cab0fc8a6ca4b78dd",
+        "beacon": "0x4ab251a39ee88917439fba82aab90760721331f63f811cd3472ef169cec39a5d",
+        "wrapper": "0x8212c2aec118628f64e22f9f53b1ffe7fe9075543b1f25192fcfb88099399be4"
+      },
+      "ephemeralDeployers": {
+        "implementation": "0x6FDa9Bd68eE678fffa0c18D5a65F4d9DA0321bbA",
+        "beacon": "0x88fD36EF715fa6751B868629816a971e595d9086",
+        "wrapper": "0x0F11E3A34F6c16015422D17AD99401F1579E6652"
+      }
+    },
+    "transactions": [
+      {
+        "sequence": 1,
+        "purpose": "create implementation CREATE3 deployer",
+        "hash": "0x3c3c2312cf40f635952e159312aa897696bd2f4bef63cc730b80fd64c9b1e4d9",
+        "block": 25680512,
+        "transactionIndex": 1092,
+        "status": 1,
+        "gasUsed": 55480
+      },
+      {
+        "sequence": 2,
+        "purpose": "deploy SmartAccountWrapper implementation",
+        "hash": "0xc4e8c72fb41d7580e8ddaf98a4f2bef082133d5c05168fd6c3468ca4b58b2f3f",
+        "block": 25680513,
+        "transactionIndex": 41,
+        "status": 1,
+        "gasUsed": 4163151
+      },
+      {
+        "sequence": 3,
+        "purpose": "create beacon CREATE3 deployer",
+        "hash": "0x73c1d7404790d876f44ce17886b573a425f598a48c1a8630329d396f645031c2",
+        "block": 25680513,
+        "transactionIndex": 500,
+        "status": 1,
+        "gasUsed": 55480
+      },
+      {
+        "sequence": 4,
+        "purpose": "deploy UpgradeableBeacon",
+        "hash": "0x3293507bc32e9d34b778432274de2e6d680b4cee20f899f88d805d380eabccb9",
+        "block": 25680513,
+        "transactionIndex": 501,
+        "status": 1,
+        "gasUsed": 249573
+      },
+      {
+        "sequence": 5,
+        "purpose": "create wrapper CREATE3 deployer",
+        "hash": "0x70037a879aba638c63893e90c0748487df83b751c66dd1b0b8816e37c1ddac3f",
+        "block": 25680513,
+        "transactionIndex": 502,
+        "status": 1,
+        "gasUsed": 55480
+      },
+      {
+        "sequence": 6,
+        "purpose": "deploy BeaconProxy and initialize Staging",
+        "hash": "0xc80393c3a336cb351ed0899f82e303a6c5fde9156f6b8756a39b4a13f54c2247",
+        "block": 25680513,
+        "transactionIndex": 503,
+        "status": 1,
+        "gasUsed": 518558
+      }
+    ]
+  },
+  "verification": {
+    "verdict": "verified",
+    "initialVerificationBlock": 25680559,
+    "postSmokeSnapshot": {
+      "block": 25682656,
+      "blockHash": "0x0bbb189fc258583eeec129b894c9e4019cb58180174abe06eead2d670d6f3f5e",
+      "timestamp": "2026-08-04T16:09:47Z"
+    },
+    "sourceVerification": {
+      "explorer": "Etherscan",
+      "status": "Exact Match",
+      "wrapperProxy": true,
+      "beacon": true,
+      "implementation": true,
+      "staging": true
+    },
+    "runtimeBytecode": {
+      "implementation": {
+        "bytes": 18868,
+        "keccak256": "0xae2c796dac5a5960ec2cee000843017598854a32473b77426d51377c38b87803",
+        "exactArtifactMatch": true
+      },
+      "beacon": {
+        "bytes": 644,
+        "keccak256": "0x0ce4415c191fe5f2c89e67fd04fc646aa9b61958a01026bf58029708b8bd2a51",
+        "exactArtifactMatch": true
+      },
+      "wrapperProxy": {
+        "bytes": 283,
+        "keccak256": "0xaf79977087d29e846e31c49ebce3f72c322575d227f1c44a8e62c17eb2226c25",
+        "exactArtifactMatchAfterImmutableSubstitution": true
+      },
+      "staging": {
+        "bytes": 577,
+        "keccak256": "0xaa3c279ffa5b301ff95420e2fd67ac73898480622ed490116162c68fad825c69",
+        "exactArtifactMatchAfterImmutableSubstitution": true
+      }
+    },
+    "proxySlots": {
+      "beaconSlot": {
+        "slot": "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50",
+        "value": "0x0000000000000000000000007b80bdb8f0777f52a6054a0e48afc15200b780b8"
+      },
+      "implementationSlot": {
+        "slot": "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+        "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "adminSlot": {
+        "slot": "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+        "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "postSmokeState": {
+      "paused": false,
+      "currentEpochId": 4,
+      "frozenEpochId": 0,
+      "totalSupplyBaseUnits": "20000",
+      "totalAssetsBaseUnits": "20000",
+      "redeemClaimReservesBaseUnits": "0",
+      "beaconImplementation": "0xC768529098e20e089Efd28A32c6Afa1D569b831a",
+      "beaconOwner": "0x349bB895dB64f74AB9788693a16Ee03776195504",
+      "stagingVault": "0x009c02a73706a68e0aE0209235408206E4F53709",
+      "smartAccountType": "EIP-7702 delegated account",
+      "smartAccountDelegationTarget": "0xe6Cae83BdE06E4c305530e199D7217f42808555B"
+    },
+    "mainnetSmokeTest": {
+      "status": "passed",
+      "transactionCount": 14,
+      "firstBlock": 25680569,
+      "lastBlock": 25682381,
+      "operations": {
+        "requestDeposit": 2,
+        "deposit": 2,
+        "requestRedeem": 2,
+        "redeem": 2,
+        "closeEpoch": 3,
+        "settleEpoch": 3
+      },
+      "transactionList": "https://etherscan.io/txs?a=0x009c02a73706a68e0ae0209235408206e4f53709"
+    }
+  },
+  "documentation": {
+    "humanVerificationReport": "verification.md",
+    "registryIndex": "../../README.md"
+  }
+}

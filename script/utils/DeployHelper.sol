@@ -22,7 +22,7 @@ library DeployHelper {
         address wrapper;
     }
 
-    /// @notice Deploy implementation, beacon, and wrapper in one transaction using CREATE3
+    /// @notice Deploy implementation, beacon, and wrapper through the CREATE3 deployment sequence
     /// @dev Deterministic addresses across all EVMs with the same salt
     function deployAll(DeployParams memory params) internal returns (DeployResult memory result) {
         // Deploy implementation via CREATE3

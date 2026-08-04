@@ -2,7 +2,7 @@
 
 This directory contains thin bash wrappers around the Foundry deployment scripts.
 
-> Current status: this repository does not document any production deployment of the current epoch-staged ERC-7540 implementation. Historical addresses from earlier implementations must not be reused as references for this code.
+> Current status: the epoch-staged implementation is deployed and smoke-tested on Ethereum mainnet. See [`deployments/`](../deployments/README.md) for the canonical addresses and verification evidence. Historical addresses from earlier implementations must not be reused as references for this code.
 
 ## Scripts
 
@@ -11,7 +11,7 @@ This directory contains thin bash wrappers around the Foundry deployment scripts
 | `predict.sh` | Dry-run `DeployAll` and preview deployed addresses | read-only |
 | `deploy.sh` | Deploy implementation, beacon, and wrapper proxy | dry-run unless `--broadcast` is passed |
 | `upgrade.sh` | Deploy a new implementation and upgrade an existing beacon | dry-run unless `--broadcast` is passed |
-| `verify.sh` | Submit block-explorer verification | submits verification request |
+| `verify.sh` | Submit implementation, beacon, proxy, or `Staging` block-explorer verification | submits verification request |
 
 ## Configuration
 
@@ -97,7 +97,12 @@ Then verify:
 ./bash/verify.sh implementation 0x...
 ./bash/verify.sh beacon 0x...
 ./bash/verify.sh wrapper 0x...
+./bash/verify.sh staging 0x... 0x... # staging address, then wrapper address
 ```
+
+The wrapper initializer deploys `Staging`, so read its address from `wrapper.staging()` before running the final command. The wrapper address is required as the `Staging` constructor argument.
+
+After verification, add a permanent record under `deployments/<chain-id>/<wrapper-address>/` containing the full source commit, compiler settings, all deployment transaction receipts, every deployed address, initialization values, live runtime-bytecode hashes, proxy-slot checks, explorer links, and a pinned-block verification report. Do not commit RPC URLs, API keys, keystore names, signer details, or mutable `run-latest.json` broadcast aliases.
 
 ## Upgrade
 
