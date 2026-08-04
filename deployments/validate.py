@@ -18,7 +18,51 @@ HASH = re.compile(r"0x[0-9a-fA-F]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)\Z")
-TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
+CANONICAL_TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+SMOKE_DOCUMENT_FIELDS = {
+    "schemaVersion",
+    "evidenceType",
+    "network",
+    "wrapper",
+    "actors",
+    "units",
+    "status",
+    "firstBlock",
+    "lastBlock",
+    "transactions",
+}
+SMOKE_TRANSACTION_FIELDS = {
+    "sequence",
+    "hash",
+    "block",
+    "transactionIndex",
+    "timestamp",
+    "status",
+    "sender",
+    "method",
+    "arguments",
+    "gasUsed",
+}
+DEPLOYMENT_TRANSACTION_FIELDS = {
+    "sequence",
+    "purpose",
+    "hash",
+    "block",
+    "transactionIndex",
+    "status",
+    "gasUsed",
+}
+MANIFEST_SMOKE_FIELDS = {
+    "status",
+    "transactionCount",
+    "firstBlock",
+    "lastBlock",
+    "evidenceFile",
+    "evidenceSha256",
+    "operations",
+    "transactionList",
+}
 
 SMOKE_METHODS = {
     "requestDeposit(uint256,address,address)": (
@@ -81,6 +125,12 @@ def require_string(value: Any, label: str) -> str:
     return value
 
 
+def require_fields(value: Any, expected: set[str], label: str) -> dict[str, Any]:
+    if type(value) is not dict or set(value) != expected:
+        raise ValueError(f"{label} fields must be exactly {sorted(expected)}")
+    return value
+
+
 def require_address(value: Any, label: str) -> None:
     if type(value) is not str or not ADDRESS.fullmatch(value):
         raise ValueError(f"{label} is not an EVM address: {value}")
@@ -132,8 +182,12 @@ def validate_transactions(
     positions: list[tuple[int, int]] = []
     timestamps: list[datetime] = []
     for expected_sequence, transaction in enumerate(transactions, start=1):
-        if type(transaction) is not dict:
-            raise ValueError(f"{label} transaction {expected_sequence} must be an object")
+        expected_fields = SMOKE_TRANSACTION_FIELDS if smoke_actors is not None else DEPLOYMENT_TRANSACTION_FIELDS
+        transaction = require_fields(
+            transaction,
+            expected_fields,
+            f"{label} transaction {expected_sequence}",
+        )
         if require_int(transaction["sequence"], f"{label} sequence", 1) != expected_sequence:
             raise ValueError(f"{label} sequence is not contiguous")
         require_hash(transaction["hash"], f"{label} transaction hash")
@@ -158,8 +212,10 @@ def validate_transactions(
             for name, kind in argument_schema.items():
                 validate_argument(arguments[name], kind, f"{label} argument {name}")
             timestamp = require_string(transaction["timestamp"], f"{label} timestamp")
+            if not CANONICAL_TIMESTAMP.fullmatch(timestamp):
+                raise ValueError(f"{label} has non-canonical UTC timestamp: {timestamp}")
             try:
-                timestamps.append(datetime.strptime(timestamp, TIMESTAMP))
+                timestamps.append(datetime.strptime(timestamp, TIMESTAMP_FORMAT))
             except ValueError as exc:
                 raise ValueError(f"{label} has invalid UTC timestamp: {timestamp}") from exc
         else:
@@ -167,6 +223,8 @@ def validate_transactions(
 
     if len(hashes) != len(set(hashes)):
         raise ValueError(f"{label} contains duplicate transaction hashes")
+    if len(positions) != len(set(positions)):
+        raise ValueError(f"{label} contains duplicate transaction positions")
     if positions != sorted(positions):
         raise ValueError(f"{label} is not ordered by block and transaction index")
     if timestamps and timestamps != sorted(timestamps):
@@ -174,40 +232,52 @@ def validate_transactions(
 
 
 def validate_smoke_test(path: Path, manifest: dict[str, Any]) -> None:
-    smoke = load_json(path)
+    smoke = require_fields(load_json(path), SMOKE_DOCUMENT_FIELDS, "smoke-test document")
     if require_int(smoke["schemaVersion"], "smoke-test schema version", 1) != 1:
         raise ValueError(f"unsupported smoke-test schema: {path}")
     if require_string(smoke["evidenceType"], "smoke-test evidence type") != "mainnet-smoke-test":
         raise ValueError(f"unsupported smoke-test schema: {path}")
     if require_string(smoke["status"], "smoke-test status") != "passed":
         raise ValueError(f"smoke test is not marked passed: {path}")
-    chain_id = require_int(smoke["network"]["chainId"], "smoke-test chain ID", 1)
+    network = require_fields(smoke["network"], {"name", "chainId"}, "smoke-test network")
+    network_name = require_string(network["name"], "smoke-test network name")
+    if network_name != manifest["network"]["name"]:
+        raise ValueError(f"smoke-test network name mismatch: {path}")
+    chain_id = require_int(network["chainId"], "smoke-test chain ID", 1)
     if chain_id != manifest["network"]["chainId"]:
         raise ValueError(f"smoke-test chain mismatch: {path}")
     require_address(smoke["wrapper"], "smoke-test wrapper")
     if smoke["wrapper"].lower() != manifest["contracts"]["wrapperProxy"]["address"].lower():
         raise ValueError(f"smoke-test wrapper mismatch: {path}")
-    if type(smoke["actors"]) is not dict or set(smoke["actors"]) != {"testAccount", "smartAccount"}:
-        raise ValueError(f"smoke-test actors are invalid: {path}")
-    for role, actor in smoke["actors"].items():
+    actors = require_fields(smoke["actors"], {"testAccount", "smartAccount"}, "smoke-test actors")
+    for role, actor in actors.items():
         require_address(actor, f"smoke-test actor {role}")
-    units = smoke["units"]
-    if type(units) is not dict or set(units) != {"assets", "shares", "navSnapshot", "decimals"}:
-        raise ValueError(f"smoke-test units are invalid: {path}")
+    units = require_fields(
+        smoke["units"],
+        {"assets", "shares", "navSnapshot", "decimals"},
+        "smoke-test units",
+    )
     for unit in ("assets", "shares", "navSnapshot"):
         require_string(units[unit], f"smoke-test unit {unit}")
     if require_int(units["decimals"], "smoke-test unit decimals") != manifest["vault"]["decimals"]:
         raise ValueError(f"smoke-test unit decimals mismatch: {path}")
-    validate_transactions(smoke["transactions"], str(path), smoke["actors"])
+    validate_transactions(smoke["transactions"], str(path), actors)
     first_block = require_int(smoke["firstBlock"], "smoke-test first block", 1)
     last_block = require_int(smoke["lastBlock"], "smoke-test last block", 1)
     if first_block != smoke["transactions"][0]["block"]:
         raise ValueError(f"smoke-test first block mismatch: {path}")
     if last_block != smoke["transactions"][-1]["block"]:
         raise ValueError(f"smoke-test last block mismatch: {path}")
-    manifest_smoke = manifest["verification"]["mainnetSmokeTest"]
+    manifest_smoke = require_fields(
+        manifest["verification"]["mainnetSmokeTest"],
+        MANIFEST_SMOKE_FIELDS,
+        "manifest smoke-test record",
+    )
     if require_string(manifest_smoke["status"], "manifest smoke-test status") != "passed":
         raise ValueError(f"manifest smoke test is not marked passed: {path}")
+    require_string(manifest_smoke["evidenceFile"], "manifest smoke-test evidence filename")
+    require_sha256(manifest_smoke["evidenceSha256"], "manifest smoke-test evidence SHA-256")
+    require_string(manifest_smoke["transactionList"], "manifest smoke-test transaction list")
     count = require_int(manifest_smoke["transactionCount"], "manifest smoke-test transaction count", 1)
     if count != len(smoke["transactions"]):
         raise ValueError(f"smoke-test transaction count mismatch: {path}")
@@ -246,8 +316,11 @@ def validate_broadcast_integrity(
 
     seen_pairs: set[tuple[str, str]] = set()
     for entry in misassociations:
-        if type(entry) is not dict:
-            raise ValueError(f"Foundry hash-misassociation entry must be an object: {label}")
+        entry = require_fields(
+            entry,
+            {"payload", "recordedHash", "correctHash"},
+            "Foundry hash-misassociation entry",
+        )
         require_string(entry["payload"], "misassociated payload purpose")
         recorded_hash = entry["recordedHash"]
         correct_hash = entry["correctHash"]
