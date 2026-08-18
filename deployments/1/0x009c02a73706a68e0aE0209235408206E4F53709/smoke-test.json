@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "mainnet-smoke-test",
+  "network": {
+    "name": "Ethereum Mainnet",
+    "chainId": 1
+  },
+  "wrapper": "0x009c02a73706a68e0aE0209235408206E4F53709",
+  "actors": {
+    "testAccount": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+    "smartAccount": "0x034d1E094Efd47d4e738033d0157f31718820470"
+  },
+  "units": {
+    "assets": "underlying-asset base units",
+    "shares": "vault-share base units",
+    "navSnapshot": "underlying-asset base units",
+    "decimals": 8
+  },
+  "status": "passed",
+  "firstBlock": 25680569,
+  "lastBlock": 25682381,
+  "transactions": [
+    {
+      "sequence": 1,
+      "hash": "0xf3631ae6c04810e5ba3fb27129c98953cc9c93dca7f834fe5f0b17e8eacdeb53",
+      "block": 25680569,
+      "transactionIndex": 793,
+      "timestamp": "2026-08-04T09:11:47Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "requestDeposit(uint256,address,address)",
+      "arguments": {
+        "assets": "39883",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "owner": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 181909
+    },
+    {
+      "sequence": 2,
+      "hash": "0x67abe8b0ddb7c31501a0d009b7510cd089c04725bdde025d7f2ecbc8dcebaf0e",
+      "block": 25681887,
+      "transactionIndex": 371,
+      "timestamp": "2026-08-04T13:35:47Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "closeEpoch()",
+      "arguments": {},
+      "gasUsed": 66103
+    },
+    {
+      "sequence": 3,
+      "hash": "0x32d5ef1262ee349fd99003e3b3dc42e9da9122cceaa6dceb17c1b6694705dda4",
+      "block": 25681953,
+      "transactionIndex": 71,
+      "timestamp": "2026-08-04T13:48:59Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "settleEpoch(uint40,uint256)",
+      "arguments": {
+        "epochId": "1",
+        "navSnapshot": "0"
+      },
+      "gasUsed": 248717
+    },
+    {
+      "sequence": 4,
+      "hash": "0x4991ac06bb0d5526c69f7541e5309e0b9c8f7942b87bf6cd375ea90a830b51ff",
+      "block": 25681964,
+      "transactionIndex": 29,
+      "timestamp": "2026-08-04T13:51:11Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "deposit(uint256,address,address)",
+      "arguments": {
+        "assets": "39883",
+        "receiver": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 163075
+    },
+    {
+      "sequence": 5,
+      "hash": "0xe605f6b9e2d8112207eb09bdf8a634e6016f949e0476748c36eeffda5b84714a",
+      "block": 25681966,
+      "transactionIndex": 244,
+      "timestamp": "2026-08-04T13:51:35Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "requestRedeem(uint256,address,address)",
+      "arguments": {
+        "shares": "20000",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "owner": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 157144
+    },
+    {
+      "sequence": 6,
+      "hash": "0xdde00161f6c375032dd9efcb5e9ca7b355feca77c07ec74bfaca941f8ace0961",
+      "block": 25681977,
+      "transactionIndex": 72,
+      "timestamp": "2026-08-04T13:53:47Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "closeEpoch()",
+      "arguments": {},
+      "gasUsed": 66103
+    },
+    {
+      "sequence": 7,
+      "hash": "0xadfea6eef6357220d3d759b1ab2237d56ab9ffb2cb821e91f43d4beef85339ea",
+      "block": 25682224,
+      "transactionIndex": 172,
+      "timestamp": "2026-08-04T14:43:23Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "settleEpoch(uint40,uint256)",
+      "arguments": {
+        "epochId": "2",
+        "navSnapshot": "39883"
+      },
+      "gasUsed": 239910
+    },
+    {
+      "sequence": 8,
+      "hash": "0xc3360a446dc82139b59e9e30562e78a2fac3bd84f3db791b6ad6bc74b018a289",
+      "block": 25682244,
+      "transactionIndex": 163,
+      "timestamp": "2026-08-04T14:47:23Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "redeem(uint256,address,address)",
+      "arguments": {
+        "shares": "20000",
+        "receiver": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 189340
+    },
+    {
+      "sequence": 9,
+      "hash": "0x83339702914d2c5d986a0e70b169871927d605a5386a7eab99a8209695e5c8b7",
+      "block": 25682248,
+      "transactionIndex": 64,
+      "timestamp": "2026-08-04T14:48:11Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "requestDeposit(uint256,address,address)",
+      "arguments": {
+        "assets": "20000",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "owner": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 181909
+    },
+    {
+      "sequence": 10,
+      "hash": "0xaab210906d148f6d791b9ec1a458eb6cf721a5a008ab460b28f9b194c599201e",
+      "block": 25682251,
+      "transactionIndex": 64,
+      "timestamp": "2026-08-04T14:48:47Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "requestRedeem(uint256,address,address)",
+      "arguments": {
+        "shares": "19883",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "owner": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 152344
+    },
+    {
+      "sequence": 11,
+      "hash": "0xfb042e2d79dfa0219be729389027729bff7395d62aba6b1239010046d54b8cf7",
+      "block": 25682272,
+      "transactionIndex": 120,
+      "timestamp": "2026-08-04T14:52:59Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "closeEpoch()",
+      "arguments": {},
+      "gasUsed": 66103
+    },
+    {
+      "sequence": 12,
+      "hash": "0x492d6822eda6edf3e5902636ff8a944119bb694713114b3f71dd2d1e4cf528ef",
+      "block": 25682288,
+      "transactionIndex": 252,
+      "timestamp": "2026-08-04T14:56:11Z",
+      "status": 1,
+      "sender": "0x034d1E094Efd47d4e738033d0157f31718820470",
+      "method": "settleEpoch(uint40,uint256)",
+      "arguments": {
+        "epochId": "3",
+        "navSnapshot": "19883"
+      },
+      "gasUsed": 294483
+    },
+    {
+      "sequence": 13,
+      "hash": "0x3d58b8b2b01b39b5781873474cffdfdcd2883fe045dae2d666d3ac457b313163",
+      "block": 25682380,
+      "transactionIndex": 100,
+      "timestamp": "2026-08-04T15:14:35Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "deposit(uint256,address,address)",
+      "arguments": {
+        "assets": "20000",
+        "receiver": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 163075
+    },
+    {
+      "sequence": 14,
+      "hash": "0x49395bb929ce8f5abe68a03e20c57189ee9f4441e7834bc9644c51229ee5dbf0",
+      "block": 25682381,
+      "transactionIndex": 70,
+      "timestamp": "2026-08-04T15:14:47Z",
+      "status": 1,
+      "sender": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+      "method": "redeem(uint256,address,address)",
+      "arguments": {
+        "shares": "19883",
+        "receiver": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641",
+        "controller": "0x43F4600D98Ae531D7e5F1f8FF68ef97779d31641"
+      },
+      "gasUsed": 189340
+    }
+  ]
+}

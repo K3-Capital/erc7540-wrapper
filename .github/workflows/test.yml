@@ -33,6 +33,11 @@ jobs:
         run: |
           forge --version
 
+      - name: Validate deployment manifests
+        run: |
+          python3 -m unittest deployments/test_validate.py
+          python3 deployments/validate.py
+
       - name: Run Forge fmt
         run: |
           forge fmt --check

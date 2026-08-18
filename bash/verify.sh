@@ -20,19 +20,22 @@ NETWORK=${NETWORK:-}
 ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-}
 CONTRACT_TYPE=${1:-}
 CONTRACT_ADDRESS=${2:-}
+STAGING_VAULT=${3:-${WRAPPER_ADDRESS:-}}
 
 usage() {
-    echo "Usage: $0 <contract_type> <address>"
+    echo "Usage: $0 <contract_type> <address> [constructor_address]"
     echo ""
     echo "Contract types:"
     echo "  beacon         - UpgradeableBeacon contract"
     echo "  implementation - SmartAccountWrapper implementation"
     echo "  wrapper        - SmartAccountWrapper proxy"
+    echo "  staging        - Staging contract (requires wrapper address)"
     echo ""
     echo "Examples:"
     echo "  $0 beacon 0x..."
     echo "  $0 implementation 0x..."
     echo "  $0 wrapper 0x..."
+    echo "  $0 staging 0x... 0x... # staging address, wrapper address"
     exit 1
 }
 
@@ -89,6 +92,22 @@ case $CONTRACT_TYPE in
             --chain "$NETWORK" \
             --verifier etherscan \
             --etherscan-api-key "$ETHERSCAN_API_KEY" \
+            --watch
+        ;;
+
+    staging)
+        if [ -z "$STAGING_VAULT" ]; then
+            echo "Error: staging verification requires the wrapper address as the third argument or WRAPPER_ADDRESS"
+            usage
+        fi
+        echo "Verifying Staging..."
+        CONSTRUCTOR_ARGS=$(cast abi-encode "constructor(address)" "$STAGING_VAULT")
+        forge verify-contract "$CONTRACT_ADDRESS" \
+            src/Staging.sol:Staging \
+            --chain "$NETWORK" \
+            --verifier etherscan \
+            --etherscan-api-key "$ETHERSCAN_API_KEY" \
+            --constructor-args "$CONSTRUCTOR_ARGS" \
             --watch
         ;;
 

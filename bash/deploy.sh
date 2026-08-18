@@ -76,7 +76,7 @@ echo "=========================================="
 echo "CREATE3 Deployment Preview"
 echo "=========================================="
 echo "Mode:             $MODE"
-echo "RPC URL:          $RPC_URL"
+echo "RPC URL:          configured (hidden)"
 if [ -n "${NETWORK:-}" ]; then
     echo "Verify network:   $NETWORK"
 fi
@@ -159,9 +159,16 @@ echo "=========================================="
 echo "Deployment $MODE successful"
 echo "=========================================="
 if [ -n "$IMPL_ADDR" ] && [ -n "$BEACON_ADDR" ] && [ -n "$WRAPPER_ADDR" ]; then
+    STAGING_ADDR=""
+    if [ "$BROADCAST" -eq 1 ]; then
+        STAGING_ADDR=$(cast call "$WRAPPER_ADDR" "staging()(address)" --rpc-url "$RPC_URL" 2>/dev/null || true)
+    fi
     echo "Implementation: $IMPL_ADDR"
     echo "Beacon:         $BEACON_ADDR"
     echo "Wrapper:        $WRAPPER_ADDR"
+    if [[ "$STAGING_ADDR" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+        echo "Staging:        $STAGING_ADDR"
+    fi
     echo ""
     if [ "$BROADCAST" -eq 1 ]; then
         echo "Add to .env:"
@@ -172,6 +179,12 @@ if [ -n "$IMPL_ADDR" ] && [ -n "$BEACON_ADDR" ] && [ -n "$WRAPPER_ADDR" ]; then
         echo "  ./bash/verify.sh implementation $IMPL_ADDR"
         echo "  ./bash/verify.sh beacon $BEACON_ADDR"
         echo "  ./bash/verify.sh wrapper $WRAPPER_ADDR"
+        if [[ "$STAGING_ADDR" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "  ./bash/verify.sh staging $STAGING_ADDR $WRAPPER_ADDR"
+        else
+            echo "  STAGING_ADDRESS=\$(cast call $WRAPPER_ADDR 'staging()(address)' --rpc-url \"\$RPC_URL\")"
+            echo "  ./bash/verify.sh staging \$STAGING_ADDRESS $WRAPPER_ADDR"
+        fi
     else
         echo "Dry run only. Re-run with --broadcast to deploy on-chain."
     fi

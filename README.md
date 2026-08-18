@@ -13,17 +13,27 @@ The current contracts implement a fully asynchronous request -> epoch close -> s
 
 ## Deployment status
 
-There are **no documented production deployments of the current epoch-staged ERC-7540 code in this repository**.
+The current epoch-staged implementation is deployed and smoke-tested on Ethereum mainnet:
 
-Older addresses that previously appeared in this README were deployed from an earlier implementation and should not be treated as instances of the current contracts. They intentionally are not listed here to avoid confusing integrators or auditors.
+| Vault | Network | Wrapper proxy | Asset | Status |
+| --- | --- | --- | --- | --- |
+| K3 cbBTC Vault (`k3cbBTC`) | Ethereum (`1`) | [`0x009c02a73706a68e0aE0209235408206E4F53709`](https://etherscan.io/address/0x009c02a73706a68e0ae0209235408206e4f53709) | [`cbBTC`](https://etherscan.io/token/0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf) | Active; exact-match verified and mainnet smoke-tested |
 
-Before publishing any new deployment address, verify that:
+The wrapper proxy is the canonical integration address. See the [`deployments/`](deployments/README.md) registry for the implementation, beacon, `Staging`, owner and smart-account configuration, all six deployment receipts, compiler settings, runtime-bytecode hashes, proxy-slot checks, authorization simulations, and mainnet smoke-test evidence.
+
+At the recorded post-smoke snapshot, the beacon/wrapper owner is an EOA with no on-chain multisig or timelock, while the settlement smart account is an EIP-7702 delegated EOA. These are material trust assumptions; see the deployment verification report before integrating.
+
+Older addresses that previously appeared in this README were deployed from an earlier implementation and must not be treated as instances of the current contracts.
+
+Before publishing an additional deployment address, verify that:
 
 1. the deployed implementation bytecode matches the current audited commit;
 2. the beacon points to that implementation;
 3. the wrapper proxy is initialized with the intended owner, smart account, asset, name, and symbol;
 4. the deployment has been verified on the target chain block explorer;
 5. the deployment has gone through the required security review for this code version.
+
+Future beacon upgrades must be added to the deployment registry without overwriting the original deployment record.
 
 ## Architecture
 
@@ -96,6 +106,7 @@ Deployment helpers live under `script/` and `bash/`.
 - `script/Deploy.s.sol:DeployAll` deploys implementation, beacon, and wrapper proxy.
 - `script/Upgrade.s.sol:Upgrade` deploys a new implementation and upgrades an existing beacon.
 - `bash/*.sh` wrap those scripts with environment loading, previews, and block-explorer verification helpers.
+- `deployments/` contains the canonical production address and verification registry.
 
 The bash wrappers default to **dry-run mode**. Pass `--broadcast` only when the previewed parameters and addresses are ready to submit on-chain.
 

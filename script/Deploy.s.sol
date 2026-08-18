@@ -6,7 +6,7 @@ import {DeployHelper} from "./utils/DeployHelper.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @notice Deploy implementation + beacon + wrapper in one tx using CREATE3
+/// @notice Deploy implementation + beacon + wrapper in one script run using CREATE3
 contract DeployAll is Script {
     function run() public {
         address deployer = vm.envAddress("DEPLOYER_ADDRESS");
