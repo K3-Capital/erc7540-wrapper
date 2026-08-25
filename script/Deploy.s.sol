@@ -3,10 +3,11 @@ pragma solidity ^0.8.0;
 
 import {Script, console} from "forge-std/Script.sol";
 import {DeployHelper} from "./utils/DeployHelper.sol";
+import {AtomicDeployment} from "./utils/AtomicDeployment.sol";
 import {SmartAccountWrapper} from "../src/SmartAccountWrapper.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @notice Deploy implementation + beacon + wrapper in one script run using CREATE3
+/// @notice Atomically deploy implementation + beacon + wrapper using CREATE3
 contract DeployAll is Script {
     function run() public {
         address deployer = vm.envAddress("DEPLOYER_ADDRESS");
@@ -24,10 +25,16 @@ contract DeployAll is Script {
         console.log("Deployer:", deployer);
 
         vm.startBroadcast(deployer);
-        DeployHelper.DeployResult memory result = DeployHelper.deployAll(params);
+        AtomicDeployment deployment =
+            new AtomicDeployment{salt: keccak256(abi.encodePacked(salt, "atomic-deployment"))}(params);
         vm.stopBroadcast();
 
+        DeployHelper.DeployResult memory result = DeployHelper.DeployResult({
+            implementation: deployment.implementation(), beacon: deployment.beacon(), wrapper: deployment.wrapper()
+        });
+
         console.log("Deployed addresses:");
+        console.log("  Coordinator:", address(deployment));
         console.log("  Implementation:", result.implementation);
         console.log("  Beacon:", result.beacon);
         console.log("  Wrapper:", result.wrapper);

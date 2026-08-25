@@ -78,6 +78,9 @@ If the dry-run output and deployment addresses are correct, broadcast explicitly
 ./bash/deploy.sh --broadcast
 ```
 
+The broadcast contains one top-level CREATE2 transaction for the one-shot `AtomicDeployment` coordinator. Its
+constructor completes the implementation, beacon, wrapper, and `Staging` deployment before that transaction returns.
+
 Use `--yes` only in automation after another process has validated the parameters:
 
 ```bash
@@ -145,6 +148,8 @@ Set `REQUEST_CONTROLLER=0x...` only when the ERC-7540 controller should differ f
 
 ## Notes
 
-- CREATE3 gives deterministic addresses for the same deployer and salt. Changing deployer or salt changes the addresses.
+- CREATE3 addresses are deterministic for the same coordinator and salt. The coordinator address is deterministic for
+  the same deployer, salt, deployment parameters, and compiled coordinator initcode; changing any of them changes the
+  component addresses.
 - The smart account/Safe is the only account allowed to close and settle epochs.
 - Do not use addresses from older deployments as evidence that the current contracts are deployed.

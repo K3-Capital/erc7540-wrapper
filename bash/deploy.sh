@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Deploy All - Deploys implementation, beacon, and wrapper via CREATE3
+# Deploy All - Atomically deploys implementation, beacon, and wrapper via CREATE3
 # Defaults to dry-run; pass --broadcast to send transactions.
 # =============================================================================
 set -euo pipefail
