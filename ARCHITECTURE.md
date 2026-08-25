@@ -399,6 +399,7 @@ The formula above assumes both `A > 0` and `S > 0`. The implementation defines e
 - If `S == 0`, the epoch must not contain redeem shares; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
 - If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
 - If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
+- If `R == S`, all incumbent shares exit and only the epoch's deposits remain active. Those deposits rebootstrap supply at 1:1 (`depositShares = D`) so a positive deposit that would round to zero at the old price cannot leave positive active assets with zero supply.
 
 Rounding rules should be conservative:
 
@@ -406,7 +407,7 @@ Rounding rules should be conservative:
 - redeem assets round down,
 - `mint` and `withdraw` claim variants use the corresponding ceil math where required by ERC-4626 semantics.
 
-Rounding residuals stay with remaining shareholders in v1. Settlement and claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
+Rounding residuals stay with remaining shareholders in v1, except that a full-supply redemption resets the remaining deposit-only vault to the 1:1 bootstrap rate. Settlement and claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
 
 The same floor-allocation rule means an extreme non-final dust claim can have nonzero claim shares/assets on one side while the corresponding claim output rounds to zero. This is accepted v1 behavior rather than a separate protocol error path: the controller or an approved ERC-7540 operator can intentionally claim the entire remaining input, burn/consume that dust claim for zero output, and advance the controller's epoch queue so later settled epochs become reachable. A partial zero-output claim remains at the head of the queue until its remaining input is consumed. Conversely, `mint` and `withdraw` reject a partial output claim when ceil rounding would consume the entire remaining input; the claimant must request the complete remaining output so no residual shares or assets become unreachable. Operationally zero-output claims should only occur for uneconomic dust amounts; users should avoid creating such small requests when they want guaranteed nonzero claim output.
 

@@ -392,7 +392,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
             redeemAssetsClaimed: 0
         });
 
-        $.activeAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
+        $.activeAssets = navSnapshot - redeemAssets + epoch.totalDepositAssets;
         epoch.settled = true;
         $.frozenEpochId = 0;
 
@@ -421,6 +421,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
                 revert SA__InvalidNavSnapshot();
             }
             return (depositAssets, 0);
+        }
+        // A full exit leaves only this epoch's deposits active. Rebootstrap
+        // those deposits 1:1 so positive active assets always have supply.
+        if (redeemShares == supplySnapshot) {
+            return (depositAssets, navSnapshot);
         }
         depositShares = depositAssets == 0 ? 0 : depositAssets.mulDiv(supplySnapshot, navSnapshot, Math.Rounding.Floor);
         redeemAssets = redeemShares == 0 ? 0 : redeemShares.mulDiv(navSnapshot, supplySnapshot, Math.Rounding.Floor);

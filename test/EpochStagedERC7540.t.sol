@@ -360,6 +360,56 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(bob), 50 * ONE, "following deposit remains claimable");
     }
 
+    function test_settleEpoch_fullRedemptionDoesNotOverflowActiveAssetsAccounting() public {
+        _requestDeposit(alice, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 1);
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        _requestDeposit(bob, 2);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        uint256 navSnapshot = type(uint256).max - 1;
+        deal(address(asset), address(vault), navSnapshot - 2);
+        _settle(2, navSnapshot, 0);
+
+        assertEq(vault.totalAssets(), 2, "full redemption leaves the epoch deposits active");
+    }
+
+    function test_settleEpoch_fullRedemptionRebootstrapsDustDepositAndKeepsEpochsLive() public {
+        _requestDeposit(alice, ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(ONE, alice, alice);
+        _requestDeposit(bob, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        _settle(2, 2 * ONE, 2 * ONE - 1);
+
+        assertEq(vault.totalSupply(), 1, "full exit rebootstrap represents the positive active assets");
+        assertEq(vault.totalAssets(), 1, "only the new deposit remains active after the full exit");
+        assertEq(vault.maxMint(bob), 1, "dust depositor receives the rebootstrapped share");
+
+        vm.prank(bob);
+        assertEq(vault.deposit(1, bob, bob), 1, "dust deposit claim transfers the rebootstrapped share");
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 1, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "positive NAV remains settleable after the full exit");
+        assertEq(vault.currentEpochId(), 4, "epoch progression remains live");
+    }
+
     function test_closeAndSettleEpoch_whenPaused() public {
         _requestDeposit(alice, 100 * ONE);
         vault.pause();
