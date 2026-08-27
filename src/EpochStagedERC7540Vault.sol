@@ -521,7 +521,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (claim.assetsClaimed == $.epochs[epochId].depositAssets[controller]) {
             _advanceDepositEpoch($, controller, epochId);
         }
-        emit Deposit(_msgSender(), receiver, assets, shares);
+        emit Deposit(controller, receiver, assets, shares);
     }
 
     function withdraw(uint256 assets, address receiver, address controller)

@@ -526,6 +526,26 @@ contract EpochStagedERC7540Test is Test {
         vault.redeem(40 * ONE, bob, alice);
     }
 
+    function test_depositClaimsEmitControllerForDirectAndOperatorCallers() public {
+        _requestDeposit(alice, 100 * ONE);
+        _requestDeposit(bob, 50 * ONE);
+        vm.prank(bob);
+        vault.setOperator(carol, true);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit IERC4626.Deposit(alice, alice, 100 * ONE, 100 * ONE);
+        vm.prank(alice);
+        vault.deposit(100 * ONE, alice, alice);
+
+        vm.expectEmit(true, true, true, true);
+        emit IERC4626.Deposit(bob, carol, 50 * ONE, 50 * ONE);
+        vm.prank(carol);
+        vault.mint(50 * ONE, carol, bob);
+    }
+
     function test_depositAndMintOverloadsUseSenderAsController() public {
         _requestDeposit(alice, 100 * ONE);
         _requestDeposit(bob, 50 * ONE);
