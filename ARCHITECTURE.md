@@ -199,7 +199,7 @@ virtualShares = 10 ** decimalsOffset
 effectivePricePerShare = (navSnapshot + 1) / (totalSupplySnapshot + virtualShares)
 ```
 
-The current vault uses OpenZeppelin's default `decimalsOffset == 0`, so the conversion basis includes one virtual asset and one virtual share. Deposits and redeems in the same epoch use this same frozen price basis.
+The current vault explicitly pins OpenZeppelin's default `decimalsOffset == 0`, so the conversion basis includes one virtual asset and one virtual share without changing share decimals. Deposits and redeems in the same epoch use this same frozen price basis.
 
 ---
 
@@ -397,7 +397,7 @@ newTotalSupply = S + depositShares - R
 
 The virtual terms make the formula defined when `A == 0` or `S == 0`:
 
-- If `S == 0` and `navSnapshot == 0`, OpenZeppelin's default offset mints the first settled deposit epoch at a 1:1 asset/share rate: `depositShares = D`.
+- If `S == 0` and `navSnapshot == 0`, the pinned zero offset mints the first settled deposit epoch at a 1:1 asset/share rate: `depositShares = D`.
 - If `S == 0` and `navSnapshot > 0`, the residual NAV remains in the conversion denominator and dilutes the next deposit instead of being ignored. This supports the zero-real-supply/nonzero-residual state that virtual accounting can create after high-price full redemptions.
 - If `S == 0`, redeem shares cannot pass the frozen epoch's `totalRedeemShares <= totalSupplySnapshot` validation.
 - If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.

@@ -101,6 +101,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         $.staging = new Staging(address(this));
     }
 
+    /// @dev Pin the OpenZeppelin virtual-share offset used by settlement and ERC-4626 conversions.
+    function _decimalsOffset() internal pure override returns (uint8) {
+        return 0;
+    }
+
     modifier onlySmartAccount() virtual;
 
     /*//////////////////////////////////////////////////////////////
@@ -414,11 +419,41 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         uint256 supplySnapshot,
         uint256 depositAssets,
         uint256 redeemShares
-    ) internal view returns (uint256 depositShares, uint256 redeemAssets) {
+    ) internal pure returns (uint256 depositShares, uint256 redeemAssets) {
         // Match OpenZeppelin ERC-4626 conversion math against the frozen epoch snapshots.
-        uint256 virtualShares = 10 ** _decimalsOffset();
-        depositShares = depositAssets.mulDiv(supplySnapshot + virtualShares, navSnapshot + 1, Math.Rounding.Floor);
-        redeemAssets = redeemShares.mulDiv(navSnapshot + 1, supplySnapshot + virtualShares, Math.Rounding.Floor);
+        depositShares = _virtualMulDiv(depositAssets, supplySnapshot, navSnapshot);
+        redeemAssets = _virtualMulDiv(redeemShares, navSnapshot, supplySnapshot);
+    }
+
+    /// @dev Returns floor(x * (numeratorSnapshot + 1) / (denominatorSnapshot + 1))
+    /// without overflowing when either snapshot is type(uint256).max.
+    function _virtualMulDiv(uint256 x, uint256 numeratorSnapshot, uint256 denominatorSnapshot)
+        internal
+        pure
+        returns (uint256 result)
+    {
+        if (x == 0) return 0;
+
+        uint256 max = type(uint256).max;
+        if (numeratorSnapshot == max) {
+            if (denominatorSnapshot == max) return x;
+
+            uint256 denominator = denominatorSnapshot + 1;
+            result = Math.mulDiv(x, max, denominator);
+            uint256 firstRemainder = mulmod(x, max, denominator);
+            result += x / denominator;
+            uint256 secondRemainder = x % denominator;
+            if (firstRemainder >= denominator - secondRemainder) result += 1;
+            return result;
+        }
+
+        uint256 numerator = numeratorSnapshot + 1;
+        if (denominatorSnapshot == max) {
+            (result,) = Math.mul512(x, numerator);
+            return result;
+        }
+
+        return Math.mulDiv(x, numerator, denominatorSnapshot + 1, Math.Rounding.Floor);
     }
 
     /*//////////////////////////////////////////////////////////////

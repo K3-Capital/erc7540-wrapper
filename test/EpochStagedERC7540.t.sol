@@ -361,6 +361,98 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.maxDeposit(bob), 50 * ONE, "following deposit remains claimable");
     }
 
+    function test_settleEpoch_fullRedemptionDoesNotOverflowActiveAssetsAccounting() public {
+        _requestDeposit(alice, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 1);
+
+        vm.prank(alice);
+        vault.requestRedeem(1, alice, alice);
+        _requestDeposit(bob, 2);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        uint256 navSnapshot = type(uint256).max;
+        deal(address(asset), address(vault), navSnapshot - 2);
+        _settle(2, navSnapshot, 0);
+
+        uint256 expectedRedeemAssets = 1 << 255;
+        assertEq(
+            vault.totalAssets(),
+            navSnapshot - expectedRedeemAssets + 2,
+            "virtual accounting remains safe at the maximum NAV"
+        );
+    }
+
+    function test_settleEpoch_handlesMaximumSupplyAndNav() public {
+        uint256 max = type(uint256).max;
+        deal(address(asset), safe, 0);
+        deal(address(asset), alice, max);
+
+        _requestDeposit(alice, max);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, max);
+
+        assertEq(vault.totalSupply(), max, "bootstrap can represent the maximum supply");
+        assertEq(vault.totalAssets(), max, "bootstrap can represent the maximum NAV");
+
+        vm.prank(alice);
+        vault.requestRedeem(max, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(2, max, max);
+
+        assertEq(vault.totalSupply(), 0, "maximum supply can be fully redeemed");
+        assertEq(vault.totalAssets(), 0, "maximum NAV can be fully reserved");
+        assertEq(vault.maxRedeem(alice), max, "maximum redemption remains claimable");
+
+        vm.prank(alice);
+        assertEq(vault.redeem(max, alice, alice), max);
+    }
+
+    function test_settleEpoch_fullRedemptionLeavesVirtualResidualAndKeepsEpochsLive() public {
+        _requestDeposit(alice, ONE);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, ONE);
+
+        vm.prank(alice);
+        vault.requestRedeem(ONE, alice, alice);
+        _requestDeposit(bob, 1);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        _settle(2, 2 * ONE, 2 * ONE - 1);
+
+        assertEq(vault.totalSupply(), 0, "dust deposit rounds to zero real shares");
+        assertEq(vault.totalAssets(), 2, "virtual accounting retains the full-exit residual");
+        assertEq(vault.maxDeposit(bob), 1, "dust deposit remains consumable");
+        assertEq(vault.maxMint(bob), 0, "dust deposit receives no shares");
+
+        vm.prank(bob);
+        assertEq(vault.deposit(1, bob, bob), 0, "full dust claim consumes the zero-share allocation");
+        assertEq(vault.maxDeposit(bob), 0, "dust claim queue advances");
+
+        _requestDeposit(carol, 3);
+
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(3, 2, 0);
+
+        assertEq(vault.frozenEpochId(), 0, "residual NAV remains settleable after the full exit");
+        assertEq(vault.currentEpochId(), 4, "epoch progression remains live");
+        assertEq(vault.totalSupply(), 1, "next material deposit receives a virtual-priced share");
+        assertEq(vault.totalAssets(), 5, "residual NAV and next deposit remain active");
+
+        vm.prank(carol);
+        assertEq(vault.deposit(3, carol, carol), 1, "next deposit claim transfers its virtual-priced share");
+    }
+
     function test_closeAndSettleEpoch_whenPaused() public {
         _requestDeposit(alice, 100 * ONE);
         vault.pause();
