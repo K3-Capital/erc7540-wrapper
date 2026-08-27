@@ -23,7 +23,7 @@ library DeployHelper {
     }
 
     /// @notice Deploy implementation, beacon, and wrapper through the CREATE3 deployment sequence
-    /// @dev Deterministic addresses across all EVMs with the same salt
+    /// @dev Deterministic addresses for a given deploying contract and salt
     function deployAll(DeployParams memory params) internal returns (DeployResult memory result) {
         // Deploy implementation via CREATE3
         bytes32 implSalt = keccak256(abi.encodePacked(params.salt, "implementation"));
