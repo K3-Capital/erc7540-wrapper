@@ -8,10 +8,16 @@ import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC2
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IEpochStagedERC7540Vault} from "./IEpochStagedERC7540Vault.sol";
+import {IEpochSettlementPreview} from "./IEpochSettlementPreview.sol";
 import {Staging} from "./Staging.sol";
 
 /// @notice Fully async ERC-7540 epoch vault base.
-abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, IEpochStagedERC7540Vault {
+abstract contract EpochStagedERC7540Vault is
+    Initializable,
+    ERC4626Upgradeable,
+    IEpochStagedERC7540Vault,
+    IEpochSettlementPreview
+{
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -359,11 +365,8 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (epoch.settled) revert SA__EpochAlreadySettled(epochId);
 
         uint256 supplySnapshot = totalSupply();
-        if (supplySnapshot != 0 && navSnapshot == 0) revert SA__InvalidNavSnapshot();
-        if (epoch.totalRedeemShares > supplySnapshot) revert SA__InvalidNavSnapshot();
-
         (uint256 depositShares, uint256 redeemAssets) =
-            _settlementAmounts(navSnapshot, supplySnapshot, epoch.totalDepositAssets, epoch.totalRedeemShares);
+            previewSettlement(navSnapshot, supplySnapshot, epoch.totalDepositAssets, epoch.totalRedeemShares);
 
         if (epoch.totalDepositAssets > 0) {
             $.staging.transferToken(asset(), address(this), epoch.totalDepositAssets);
@@ -412,6 +415,18 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
             depositShares,
             redeemAssets
         );
+    }
+
+    /// @inheritdoc IEpochSettlementPreview
+    function previewSettlement(
+        uint256 navSnapshot,
+        uint256 totalSupplySnapshot,
+        uint256 totalDepositAssets,
+        uint256 totalRedeemShares
+    ) public view virtual override returns (uint256 depositShares, uint256 redeemAssets) {
+        if (totalSupplySnapshot != 0 && navSnapshot == 0) revert SA__InvalidNavSnapshot();
+        if (totalRedeemShares > totalSupplySnapshot) revert SA__InvalidNavSnapshot();
+        return _settlementAmounts(navSnapshot, totalSupplySnapshot, totalDepositAssets, totalRedeemShares);
     }
 
     function _settlementAmounts(

@@ -12,6 +12,7 @@ import {IERC7540, IERC7540Deposit, IERC7540Redeem, IERC7540Operator} from "forge
 import {IERC7575, IERC7575Share} from "forge-std/interfaces/IERC7575.sol";
 
 import {EpochStagedERC7540Vault} from "./EpochStagedERC7540Vault.sol";
+import {IEpochSettlementPreview} from "./IEpochSettlementPreview.sol";
 import {Staging} from "./Staging.sol";
 
 contract SmartAccountWrapper is
@@ -175,6 +176,7 @@ contract SmartAccountWrapper is
         return super.supportsInterface(interfaceId) || interfaceId == type(IERC7540).interfaceId
             || interfaceId == type(IERC7540Deposit).interfaceId || interfaceId == type(IERC7540Redeem).interfaceId
             || interfaceId == type(IERC7540Operator).interfaceId || interfaceId == type(IERC7575).interfaceId
-            || interfaceId == type(IERC7575Share).interfaceId;
+            || interfaceId == type(IERC7575Share).interfaceId
+            || interfaceId == type(IEpochSettlementPreview).interfaceId;
     }
 }

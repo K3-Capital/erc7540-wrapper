@@ -404,6 +404,31 @@ The virtual terms make the formula defined when `A == 0` or `S == 0`:
 - If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
 The virtual share is not a minted or redeemable ERC-20 balance. It captures part of unsolicited donations economically through the conversion rate, making a donation-inflation attack unprofitable rather than assigning the donation to a bootstrap shareholder.
 
+### Authoritative settlement preview capability
+
+Integrators must not copy the current settlement formula and assume that every deployed vault uses it. The wrapper exposes a version-discoverable preview capability:
+
+```solidity
+previewSettlement(
+    uint256 navSnapshot,
+    uint256 totalSupplySnapshot,
+    uint256 totalDepositAssets,
+    uint256 totalRedeemShares
+) returns (uint256 depositShares, uint256 redeemAssets)
+```
+
+`previewSettlement` runs the same input validation and internal conversion path that `settleEpoch` uses. The caller supplies the frozen settlement inputs; operators and backoffice systems must read those inputs from the selected vault's chain state and keep them bound to the observed block. The interface uses `view` mutability so future implementations may consult immutable settlement configuration without changing the capability selector. The current offset-zero implementation does not need to read storage. The interface is advertised through ERC-165 as `IEpochSettlementPreview`, allowing an integrator to distinguish this implementation from older deployments that do not expose an authoritative preview.
+
+This capability is separate from the standard ERC-4626 preview methods. Because the vault is fully asynchronous, `previewDeposit`, `previewMint`, `previewWithdraw`, and `previewRedeem` continue to revert as required by the async flow. The settlement preview describes an entire epoch at an operator-supplied NAV; it does not quote an individual synchronous user action.
+
+The intended mixed-version integration policy is:
+
+- if `IEpochSettlementPreview` is supported, use the vault-returned outputs for operator display and redemption funding;
+- if the capability is absent, an integrator may use an explicitly scoped compatibility adapter for that legacy vault version;
+- if a vault advertises the capability but the preview call fails, fail closed rather than silently substituting another implementation's formula.
+
+Future settlement implementations can remain compatible with the same backoffice by preserving one invariant: for identical supplied inputs, `previewSettlement` must return exactly the deposit shares and redeem assets that `settleEpoch` will apply.
+
 Rounding rules should be conservative:
 
 - deposit shares round down,
@@ -587,7 +612,7 @@ function share() external view returns (address) {
 
 Because `share() == address(this)`, the wrapper is also its own ERC-7575 share token. The share side implements `vault(address asset)`, returning the wrapper for the configured underlying asset and `address(0)` for unsupported assets.
 
-`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, ERC-7575 vault, and ERC-7575 share-token support.
+`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, ERC-7575 vault, ERC-7575 share-token, and `IEpochSettlementPreview` support.
 
 ---
 

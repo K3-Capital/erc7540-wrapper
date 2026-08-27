@@ -116,6 +116,30 @@ contract EpochStagedERC7540Test is Test {
         vault.closeEpoch();
     }
 
+    function test_previewSettlementIsAuthoritativeForEpochSettlement() public {
+        _requestDeposit(alice, 100);
+        vm.prank(safe);
+        vault.closeEpoch();
+        _settle(1, 0, 0);
+        _claimDeposit(alice, 100);
+
+        _requestDeposit(bob, 25);
+        vm.prank(alice);
+        vault.requestRedeem(7, alice, alice);
+        vm.prank(safe);
+        vault.closeEpoch();
+
+        (uint256 depositShares, uint256 redeemAssets) = vault.previewSettlement(1_000, 100, 25, 7);
+
+        assertEq(depositShares, 2, "preview returns the exact shares settlement will mint");
+        assertEq(redeemAssets, 69, "preview returns the exact assets settlement will reserve");
+
+        _settle(2, 1_000, redeemAssets - 25);
+
+        assertEq(vault.totalSupply(), 95, "settlement applies the previewed mint and burn amounts");
+        assertEq(vault.totalAssets(), 956, "settlement applies the previewed reserve amount");
+    }
+
     function test_operatorDepositAndRedeemAllowanceBranches() public {
         vm.prank(alice);
         vault.setOperator(bob, true);
