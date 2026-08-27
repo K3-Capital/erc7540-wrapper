@@ -121,7 +121,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 depositAssets = bound(uint256(depositAssets_), 1, MAX_AMOUNT / 1e12);
 
-        uint256 expectedShares = depositAssets.mulDiv(initialSupply, navSnapshot, Math.Rounding.Floor);
+        uint256 expectedShares = depositAssets.mulDiv(initialSupply + 1, navSnapshot + 1, Math.Rounding.Floor);
         vm.assume(expectedShares > 0);
 
         _seedVault(initialSupply);
@@ -149,7 +149,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 initialSupply = bound(uint256(initialSupply_), 1, MAX_AMOUNT / 1e12);
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 redeemShares = bound(uint256(redeemShares_), 1, initialSupply);
-        uint256 expectedAssets = redeemShares.mulDiv(navSnapshot, initialSupply, Math.Rounding.Floor);
+        uint256 expectedAssets = redeemShares.mulDiv(navSnapshot + 1, initialSupply + 1, Math.Rounding.Floor);
         vm.assume(expectedAssets > 0);
 
         _seedVault(initialSupply);
@@ -181,7 +181,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 initialSupply = bound(uint256(initialSupply_), 1, MAX_AMOUNT / 1e12);
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 depositAssets = bound(uint256(depositAssets_), 2, MAX_AMOUNT / 1e12);
-        uint256 expectedShares = depositAssets.mulDiv(initialSupply, navSnapshot, Math.Rounding.Floor);
+        uint256 expectedShares = depositAssets.mulDiv(initialSupply + 1, navSnapshot + 1, Math.Rounding.Floor);
         vm.assume(expectedShares > 1);
         uint256 firstAssetClaim = bound(uint256(firstAssetClaim_), 1, depositAssets - 1);
         vm.assume(firstAssetClaim.mulDiv(expectedShares, depositAssets, Math.Rounding.Floor) > 0);
@@ -218,7 +218,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 initialSupply = bound(uint256(initialSupply_), 2, MAX_AMOUNT / 1e12);
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 redeemShares = bound(uint256(redeemShares_), 2, initialSupply);
-        uint256 expectedAssets = redeemShares.mulDiv(navSnapshot, initialSupply, Math.Rounding.Floor);
+        uint256 expectedAssets = redeemShares.mulDiv(navSnapshot + 1, initialSupply + 1, Math.Rounding.Floor);
         vm.assume(expectedAssets > 1);
         uint256 firstAssetClaim = bound(uint256(firstAssetClaim_), 1, expectedAssets - 1);
 
@@ -261,7 +261,7 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 aliceAssets = bound(uint256(aliceAssets_), 1, MAX_AMOUNT / 1e12);
         uint256 bobAssets = bound(uint256(bobAssets_), 1, MAX_AMOUNT / 1e12);
         uint256 totalDepositAssets = aliceAssets + bobAssets;
-        uint256 settlementShares = totalDepositAssets.mulDiv(initialSupply, navSnapshot, Math.Rounding.Floor);
+        uint256 settlementShares = totalDepositAssets.mulDiv(initialSupply + 1, navSnapshot + 1, Math.Rounding.Floor);
         vm.assume(settlementShares >= 2);
 
         _seedVault(initialSupply);
@@ -298,7 +298,8 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 bobAssets = bound(uint256(bobAssets_), 1, MAX_AMOUNT / 1e12);
         uint256 carolAssets = bound(uint256(carolAssets_), 1, MAX_AMOUNT / 1e12);
-        uint256 settlementShares = (bobAssets + carolAssets).mulDiv(initialSupply, navSnapshot, Math.Rounding.Floor);
+        uint256 settlementShares =
+            (bobAssets + carolAssets).mulDiv(initialSupply + 1, navSnapshot + 1, Math.Rounding.Floor);
         vm.assume(settlementShares >= 2);
 
         _seedVault(initialSupply);
@@ -335,7 +336,8 @@ contract EpochStagedERC7540FuzzTest is Test {
         uint256 navSnapshot = bound(uint256(navSnapshot_), 1, MAX_AMOUNT / 1e12);
         uint256 bobShares = bound(uint256(bobShares_), 1, initialSupply - 1);
         uint256 carolShares = bound(uint256(carolShares_), 1, initialSupply - bobShares);
-        uint256 reservedAssets = (bobShares + carolShares).mulDiv(navSnapshot, initialSupply, Math.Rounding.Floor);
+        uint256 reservedAssets =
+            (bobShares + carolShares).mulDiv(navSnapshot + 1, initialSupply + 1, Math.Rounding.Floor);
         vm.assume(reservedAssets >= 2);
 
         _seedVault(initialSupply);
