@@ -8,10 +8,16 @@ import {ERC4626Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC2
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IEpochStagedERC7540Vault} from "./IEpochStagedERC7540Vault.sol";
+import {IEpochSettlementPreview} from "./IEpochSettlementPreview.sol";
 import {Staging} from "./Staging.sol";
 
 /// @notice Fully async ERC-7540 epoch vault base.
-abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, IEpochStagedERC7540Vault {
+abstract contract EpochStagedERC7540Vault is
+    Initializable,
+    ERC4626Upgradeable,
+    IEpochStagedERC7540Vault,
+    IEpochSettlementPreview
+{
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -99,6 +105,11 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         EpochStagedERC7540VaultStorage storage $ = _getEpochStagedERC7540VaultStorage();
         $.currentEpochId = 1;
         $.staging = new Staging(address(this));
+    }
+
+    /// @dev Pin the OpenZeppelin virtual-share offset used by settlement and ERC-4626 conversions.
+    function _decimalsOffset() internal pure override returns (uint8) {
+        return 0;
     }
 
     modifier onlySmartAccount() virtual;
@@ -354,12 +365,8 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         if (epoch.settled) revert SA__EpochAlreadySettled(epochId);
 
         uint256 supplySnapshot = totalSupply();
-        if (supplySnapshot == 0 && navSnapshot != 0) revert SA__InvalidNavSnapshot();
-        if (supplySnapshot != 0 && navSnapshot == 0) revert SA__InvalidNavSnapshot();
-        if (epoch.totalRedeemShares > supplySnapshot) revert SA__InvalidNavSnapshot();
-
         (uint256 depositShares, uint256 redeemAssets) =
-            _settlementAmounts(navSnapshot, supplySnapshot, epoch.totalDepositAssets, epoch.totalRedeemShares);
+            previewSettlement(navSnapshot, supplySnapshot, epoch.totalDepositAssets, epoch.totalRedeemShares);
 
         if (epoch.totalDepositAssets > 0) {
             $.staging.transferToken(asset(), address(this), epoch.totalDepositAssets);
@@ -392,7 +399,7 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
             redeemAssetsClaimed: 0
         });
 
-        $.activeAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
+        $.activeAssets = navSnapshot - redeemAssets + epoch.totalDepositAssets;
         epoch.settled = true;
         $.frozenEpochId = 0;
 
@@ -410,20 +417,58 @@ abstract contract EpochStagedERC7540Vault is Initializable, ERC4626Upgradeable, 
         );
     }
 
+    /// @inheritdoc IEpochSettlementPreview
+    function previewSettlement(
+        uint256 navSnapshot,
+        uint256 totalSupplySnapshot,
+        uint256 totalDepositAssets,
+        uint256 totalRedeemShares
+    ) public view virtual override returns (uint256 depositShares, uint256 redeemAssets) {
+        if (totalSupplySnapshot != 0 && navSnapshot == 0) revert SA__InvalidNavSnapshot();
+        if (totalRedeemShares > totalSupplySnapshot) revert SA__InvalidNavSnapshot();
+        return _settlementAmounts(navSnapshot, totalSupplySnapshot, totalDepositAssets, totalRedeemShares);
+    }
+
     function _settlementAmounts(
         uint256 navSnapshot,
         uint256 supplySnapshot,
         uint256 depositAssets,
         uint256 redeemShares
     ) internal pure returns (uint256 depositShares, uint256 redeemAssets) {
-        if (supplySnapshot == 0) {
-            if (redeemShares != 0) {
-                revert SA__InvalidNavSnapshot();
-            }
-            return (depositAssets, 0);
+        // Match OpenZeppelin ERC-4626 conversion math against the frozen epoch snapshots.
+        depositShares = _virtualMulDiv(depositAssets, supplySnapshot, navSnapshot);
+        redeemAssets = _virtualMulDiv(redeemShares, navSnapshot, supplySnapshot);
+    }
+
+    /// @dev Returns floor(x * (numeratorSnapshot + 1) / (denominatorSnapshot + 1))
+    /// without overflowing when either snapshot is type(uint256).max.
+    function _virtualMulDiv(uint256 x, uint256 numeratorSnapshot, uint256 denominatorSnapshot)
+        internal
+        pure
+        returns (uint256 result)
+    {
+        if (x == 0) return 0;
+
+        uint256 max = type(uint256).max;
+        if (numeratorSnapshot == max) {
+            if (denominatorSnapshot == max) return x;
+
+            uint256 denominator = denominatorSnapshot + 1;
+            result = Math.mulDiv(x, max, denominator);
+            uint256 firstRemainder = mulmod(x, max, denominator);
+            result += x / denominator;
+            uint256 secondRemainder = x % denominator;
+            if (firstRemainder >= denominator - secondRemainder) result += 1;
+            return result;
         }
-        depositShares = depositAssets == 0 ? 0 : depositAssets.mulDiv(supplySnapshot, navSnapshot, Math.Rounding.Floor);
-        redeemAssets = redeemShares == 0 ? 0 : redeemShares.mulDiv(navSnapshot, supplySnapshot, Math.Rounding.Floor);
+
+        uint256 numerator = numeratorSnapshot + 1;
+        if (denominatorSnapshot == max) {
+            (result,) = Math.mul512(x, numerator);
+            return result;
+        }
+
+        return Math.mulDiv(x, numerator, denominatorSnapshot + 1, Math.Rounding.Floor);
     }
 
     /*//////////////////////////////////////////////////////////////

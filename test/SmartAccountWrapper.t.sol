@@ -230,6 +230,10 @@ contract SmartAccountWrapperTest is Test {
         assertTrue(vault.supportsInterface(type(IERC7540Operator).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7575).interfaceId));
         assertTrue(vault.supportsInterface(type(IERC7575Share).interfaceId));
+        assertTrue(
+            vault.supportsInterface(bytes4(keccak256("previewSettlement(uint256,uint256,uint256,uint256)"))),
+            "settlement preview capability is discoverable"
+        );
         assertFalse(vault.supportsInterface(0xffffffff));
     }
 }

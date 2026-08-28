@@ -102,7 +102,7 @@ flowchart TB
 - **Frozen epochs lock settlement-critical admin paths.** While `frozenEpochId() != 0`, the owner cannot rescue the underlying asset from the wrapper or rotate the configured smart account. Unrelated-token rescue remains available.
 - **Pending assets and shares live in a separate `Staging` contract.** The name and design should be project-specific and should not reference third-party implementations.
 - **No synchronous deposit or withdrawal path in v1.** All user entry and exit goes through ERC-7540 request and claim flows.
-- **Rounding dust stays with remaining shareholders.** Settlement and claim rounding residuals are not redirected to a fee receiver in v1. Claim-time per-epoch residuals are assigned to the final claimant for that epoch/side so no staged share or asset dust remains stranded.
+- **Settlement rounding stays in active NAV.** Virtual conversion residuals are not redirected to a fee receiver in v1 and can remain as active NAV even after real supply reaches zero. Claim-time per-epoch residuals are assigned to the final claimant for that epoch/side so no staged share or asset dust remains stranded.
 - **Pause is request-only.** Pausing the wrapper blocks new deposit and redeem requests, but it does not freeze Safe settlement operations or user/operator claims for already-settled epochs. The ERC-4626 `max*` claim views remain truthful while paused.
 
 ---
@@ -192,13 +192,14 @@ struct SettlementData {
 }
 ```
 
-The settlement price is:
+Settlement uses the same virtual asset/share conversion basis as OpenZeppelin ERC-4626:
 
 ```text
-pricePerShare = navSnapshot / totalSupplySnapshot
+virtualShares = 10 ** decimalsOffset
+effectivePricePerShare = (navSnapshot + 1) / (totalSupplySnapshot + virtualShares)
 ```
 
-Deposits and redeems in the same epoch use the same price.
+The current vault explicitly pins OpenZeppelin's default `decimalsOffset == 0`, so the conversion basis includes one virtual asset and one virtual share without changing share decimals. Deposits and redeems in the same epoch use this same frozen price basis.
 
 ---
 
@@ -378,8 +379,9 @@ R = totalRedeemShares in closed epoch
 Then:
 
 ```text
-depositShares = D * S / A
-redeemAssets  = R * A / S
+V = 10 ** decimalsOffset
+depositShares = D * (S + V) / (A + 1)
+redeemAssets  = R * (A + 1) / (S + V)
 ```
 
 After settlement:
@@ -393,12 +395,40 @@ newTotalSupply = S + depositShares - R
 
 ### Initial issuance and zero-NAV cases
 
-The formula above assumes both `A > 0` and `S > 0`. The implementation defines explicit bootstrap and invalid-NAV branches:
+The virtual terms make the formula defined when `A == 0` or `S == 0`:
 
-- If `S == 0`, `navSnapshot` must also be zero. The first settled deposit epoch mints shares at a 1:1 asset/share rate: `depositShares = D`.
-- If `S == 0`, the epoch must not contain redeem shares; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
+- If `S == 0` and `navSnapshot == 0`, the pinned zero offset mints the first settled deposit epoch at a 1:1 asset/share rate: `depositShares = D`.
+- If `S == 0` and `navSnapshot > 0`, the residual NAV remains in the conversion denominator and dilutes the next deposit instead of being ignored. This supports the zero-real-supply/nonzero-residual state that virtual accounting can create after high-price full redemptions.
+- If `S == 0`, redeem shares cannot pass the frozen epoch's `totalRedeemShares <= totalSupplySnapshot` validation.
 - If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
 - If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
+
+The virtual share is not a minted or redeemable ERC-20 balance. It captures part of unsolicited donations economically through the conversion rate, making a donation-inflation attack unprofitable rather than assigning the donation to a bootstrap shareholder.
+
+### Authoritative settlement preview capability
+
+Integrators must not copy the current settlement formula and assume that every deployed vault uses it. The wrapper exposes a version-discoverable preview capability:
+
+```solidity
+previewSettlement(
+    uint256 navSnapshot,
+    uint256 totalSupplySnapshot,
+    uint256 totalDepositAssets,
+    uint256 totalRedeemShares
+) returns (uint256 depositShares, uint256 redeemAssets)
+```
+
+`previewSettlement` runs the same input validation and internal conversion path that `settleEpoch` uses. The caller supplies the frozen settlement inputs; operators and backoffice systems must read those inputs from the selected vault's chain state and keep them bound to the observed block. The interface uses `view` mutability so future implementations may consult immutable settlement configuration without changing the capability selector. The current offset-zero implementation does not need to read storage. The interface is advertised through ERC-165 as `IEpochSettlementPreview`, allowing an integrator to distinguish this implementation from older deployments that do not expose an authoritative preview.
+
+This capability is separate from the standard ERC-4626 preview methods. Because the vault is fully asynchronous, `previewDeposit`, `previewMint`, `previewWithdraw`, and `previewRedeem` continue to revert as required by the async flow. The settlement preview describes an entire epoch at an operator-supplied NAV; it does not quote an individual synchronous user action.
+
+The intended mixed-version integration policy is:
+
+- if `IEpochSettlementPreview` is supported, use the vault-returned outputs for operator display and redemption funding;
+- if the capability is absent, an integrator may use an explicitly scoped compatibility adapter for that legacy vault version;
+- if a vault advertises the capability but the preview call fails, fail closed rather than silently substituting another implementation's formula.
+
+Future settlement implementations can remain compatible with the same backoffice by preserving one invariant: for identical supplied inputs, `previewSettlement` must return exactly the deposit shares and redeem assets that `settleEpoch` will apply.
 
 Rounding rules should be conservative:
 
@@ -406,7 +436,7 @@ Rounding rules should be conservative:
 - redeem assets round down,
 - `mint` and `withdraw` claim variants use the corresponding ceil math where required by ERC-4626 semantics.
 
-Rounding residuals stay with remaining shareholders in v1. Settlement and claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
+Settlement rounding remains in active NAV in v1. With virtual accounting, this can leave nonzero active NAV after all real shares are redeemed; the next settlement continues pricing against that residual. Claim rounding dust is not redirected to a fee receiver. For claim-time per-controller allocations, all non-final claimants receive their floor allocation. The controller that claims the last remaining deposit assets for an epoch receives any remaining minted-share residual, and the controller that claims the last remaining redeem shares for an epoch receives any remaining reserved-asset residual. This makes the residual allocation claim-order dependent, but it preserves O(1) lazy claim accounting and prevents unclaimable dust from remaining in `Staging` or `redeemClaimReserves()`.
 
 The same floor-allocation rule means an extreme non-final dust claim can have nonzero claim shares/assets on one side while the corresponding claim output rounds to zero. This is accepted v1 behavior rather than a separate protocol error path: the controller or an approved ERC-7540 operator can intentionally claim the entire remaining input, burn/consume that dust claim for zero output, and advance the controller's epoch queue so later settled epochs become reachable. A partial zero-output claim remains at the head of the queue until its remaining input is consumed. Conversely, `mint` and `withdraw` reject a partial output claim when ceil rounding would consume the entire remaining input; the claimant must request the complete remaining output so no residual shares or assets become unreachable. Operationally zero-output claims should only occur for uneconomic dust amounts; users should avoid creating such small requests when they want guaranteed nonzero claim output.
 
@@ -583,7 +613,7 @@ function share() external view returns (address) {
 
 Because `share() == address(this)`, the wrapper is also its own ERC-7575 share token. The share side implements `vault(address asset)`, returning the wrapper for the configured underlying asset and `address(0)` for unsupported assets.
 
-`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, ERC-7575 vault, and ERC-7575 share-token support.
+`supportsInterface` should advertise ERC-165, ERC-7540 deposit, ERC-7540 redeem/operator, ERC-7575 vault, ERC-7575 share-token, and `IEpochSettlementPreview` support.
 
 ---
 
