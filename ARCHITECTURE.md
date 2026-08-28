@@ -402,6 +402,7 @@ The virtual terms make the formula defined when `A == 0` or `S == 0`:
 - If `S == 0`, redeem shares cannot pass the frozen epoch's `totalRedeemShares <= totalSupplySnapshot` validation.
 - If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
 - If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
+
 The virtual share is not a minted or redeemable ERC-20 balance. It captures part of unsolicited donations economically through the conversion rate, making a donation-inflation attack unprofitable rather than assigning the donation to a bootstrap shareholder.
 
 ### Authoritative settlement preview capability

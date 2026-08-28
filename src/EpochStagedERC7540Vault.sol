@@ -399,7 +399,7 @@ abstract contract EpochStagedERC7540Vault is
             redeemAssetsClaimed: 0
         });
 
-        $.activeAssets = navSnapshot + epoch.totalDepositAssets - redeemAssets;
+        $.activeAssets = navSnapshot - redeemAssets + epoch.totalDepositAssets;
         epoch.settled = true;
         $.frozenEpochId = 0;
 

@@ -438,7 +438,7 @@ contract EpochStagedERC7540Test is Test {
         assertEq(vault.redeem(max, alice, alice), max);
     }
 
-    function test_settleEpoch_fullRedemptionLeavesVirtualResidualAndKeepsEpochsLive() public {
+    function test_I03_virtualAccountingKeepsEpochsLiveAfterZeroShareFullRedemption() public {
         _requestDeposit(alice, ONE);
         vm.prank(safe);
         vault.closeEpoch();
