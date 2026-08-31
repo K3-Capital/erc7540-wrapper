@@ -11,6 +11,10 @@ The current contracts implement a fully asynchronous request -> epoch close -> s
 - the configured smart account closes and settles one frozen epoch at a time with a NAV snapshot.
 - users or approved ERC-7540 operators claim settled shares/assets through the ERC-4626 `deposit`, `mint`, `withdraw`, and `redeem` claim functions.
 
+### Security assumptions
+
+Settlement uses offset-zero virtual accounting: one virtual asset and one virtual share. This is defense in depth against bootstrap donation inflation, not a guarantee that every nonzero deposit epoch receives nonzero shares. A materially inflated operator-supplied NAV can still create unfavorable or zero-share deposit rounding across repeated epochs. Deployments must maintain documented bootstrap and ongoing real-supply floors, and operators must reconcile unexplained custody inflows and abnormal NAV changes before settlement. Integrators must use `previewSettlement` and surface zero-share outputs explicitly. See [Donation and NAV-inflation security assumptions](ARCHITECTURE.md#donation-and-nav-inflation-security-assumptions).
+
 ## Deployment status
 
 The current epoch-staged implementation is deployed and smoke-tested on Ethereum mainnet:
