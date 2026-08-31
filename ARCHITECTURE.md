@@ -403,7 +403,22 @@ The virtual terms make the formula defined when `A == 0` or `S == 0`:
 - If `S > 0`, `navSnapshot` must be nonzero; otherwise settlement reverts with `SA__InvalidNavSnapshot`.
 - If the frozen epoch's redeem shares exceed `totalSupplySnapshot`, settlement reverts with `SA__InvalidNavSnapshot`.
 
-The virtual share is not a minted or redeemable ERC-20 balance. It captures part of unsolicited donations economically through the conversion rate, making a donation-inflation attack unprofitable rather than assigning the donation to a bootstrap shareholder.
+The virtual share is not a minted or redeemable ERC-20 balance. It captures part of unsolicited donations economically through the conversion rate and raises the cost of a bootstrap donation-inflation attack, but offset zero does not eliminate every profitable sequence.
+
+### Donation and NAV-inflation security assumptions
+
+The current vault uses one virtual asset and one virtual share (`decimalsOffset == 0`). This protects the zero-state conversion and prevents the virtual portion of an accepted donation from being assigned entirely to the first real shareholder. It is defense in depth, not a proof that donation inflation is impossible. In particular, an attacker can potentially amortize the initial cost across repeated settlements when an inflated NAV persists and later deposit epochs round to zero shares, as discussed in [OpenZeppelin issue #5223](https://github.com/OpenZeppelin/openzeppelin-contracts/issues/5223).
+
+Unsolicited underlying transferred to the wrapper does not automatically change `totalAssets()`: active NAV is tracked in `activeAssets`, and wrapper surplus is swept to the configured smart account at settlement. Unsolicited assets become relevant to pricing when the valuation process treats them as protocol-owned assets and includes them in the operator-supplied `navSnapshot`, whether they arrived at the wrapper, the smart account, or another valued custody position.
+
+The protocol therefore relies on the following deployment and operating assumptions:
+
+- Every deployment must define an asset-specific minimum bootstrap capital and minimum ongoing real share supply. The seed position must remain held, locked, or operationally prevented from redeeming below that floor; an initial seed alone is insufficient if later redemptions can return supply to dust.
+- Operators must reconcile NAV against approved custody and valuation sources, identify unexplained inflows, and investigate abnormal changes before signing settlement.
+- Production NAV warning and hard-stop thresholds must be explicitly configured and reviewed. Application defaults are not a substitute for an approved per-deployment policy.
+- Integrators must call the authoritative `previewSettlement` capability and surface the returned deposit-share amount. A preview is an exact output calculation, not a safety approval.
+
+The floor conversion intentionally preserves v1 rounding behavior: a nonzero aggregate deposit can mint zero shares when it is worth less than one raw share unit at the frozen price. Settlement consumes those deposit assets into active NAV without minting real shares, and a controller can consume its corresponding claim for zero output. This keeps dust epochs and full-redemption residual states live without introducing a frozen-epoch cancellation or refund mechanism. Operators should treat a material zero-share preview as an escalation condition and may accept zero-share settlement only under a documented, asset-specific dust policy. The contract does not enforce that policy on-chain.
 
 ### Authoritative settlement preview capability
 
@@ -419,6 +434,8 @@ previewSettlement(
 ```
 
 `previewSettlement` runs the same input validation and internal conversion path that `settleEpoch` uses. The caller supplies the frozen settlement inputs; operators and backoffice systems must read those inputs from the selected vault's chain state and keep them bound to the observed block. The interface uses `view` mutability so future implementations may consult immutable settlement configuration without changing the capability selector. The current offset-zero implementation does not need to read storage. The interface is advertised through ERC-165 as `IEpochSettlementPreview`, allowing an integrator to distinguish this implementation from older deployments that do not expose an authoritative preview.
+
+The returned values describe what settlement will apply; they do not certify that the NAV or resulting exchange rate is economically safe. In particular, `totalDepositAssets > 0` may return `depositShares == 0`. Integrators must display that outcome distinctly and apply the deployment's materiality, dust, and approval policy instead of treating zero as an ordinary successful quote.
 
 This capability is separate from the standard ERC-4626 preview methods. Because the vault is fully asynchronous, `previewDeposit`, `previewMint`, `previewWithdraw`, and `previewRedeem` continue to revert as required by the async flow. The settlement preview describes an entire epoch at an operator-supplied NAV; it does not quote an individual synchronous user action.
 
